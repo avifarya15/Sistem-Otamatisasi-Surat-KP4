@@ -1,0 +1,10 @@
+import { useEffect, useState } from 'react';
+import api from '../api/axios';
+import Icon from '../components/Icon';
+
+function LogAktivitasPage() {
+  const [logs, setLogs] = useState([]); const [loading, setLoading] = useState(true);
+  useEffect(() => { api.get('/admin/logs').then(res => setLogs(res.data)).catch(err => console.error(err)).finally(() => setLoading(false)); }, []);
+  return <main className="admin-main page-wrap"><div className="admin-heading"><div><div className="eyebrow">Audit trail</div><h1 className="display-font">Aktivitas sistem</h1><p>Jejak perubahan dan aktivitas petugas tersimpan di sini.</p></div><div className="log-count"><span className="tiny-dot" /> {logs.length} catatan</div></div><section className="soft-card logs-card"><div className="section-head"><div><h2>Riwayat aktivitas</h2><p>Terbaru berada di urutan paling atas.</p></div><span className="status-pill"><Icon name="shield" size={13} /> Terlindungi</span></div><div className="table-wrap"><table className="data-table logs-table"><thead><tr><th>Waktu</th><th>Admin</th><th>Aktivitas</th><th>IP address</th></tr></thead><tbody>{loading ? <tr><td colSpan="4"><div className="loading-state">Memuat riwayat…</div></td></tr> : logs.length === 0 ? <tr><td colSpan="4"><div className="empty-state"><span className="empty-icon"><Icon name="log" size={21} /></span><p>Belum ada aktivitas tercatat.</p></div></td></tr> : logs.map(log => <tr key={log.id}><td><strong className="log-time">{new Date(log.timestamp).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</strong><span className="person-nip">{new Date(log.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span></td><td><span className="admin-avatar">{(log.admin_username || 'A').slice(0, 1).toUpperCase()}</span>{log.admin_username || '—'}</td><td><strong className="log-action">{log.aksi}</strong><span className="person-nip">{log.detail || 'Tidak ada detail tambahan'}</span></td><td className="mono">{log.ip_address || '—'}</td></tr>)}</tbody></table></div></section></main>;
+}
+export default LogAktivitasPage;

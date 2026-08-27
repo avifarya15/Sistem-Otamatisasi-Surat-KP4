@@ -1,0 +1,21 @@
+{
+  "name": "kp4-system",
+  "version": "1.0.0",
+  "description": "Sistem Informasi & Verifikasi Cetak Otomatis Surat KP4 PNS",
+  "scripts": {
+    "dev": "node dev.js",
+    "start": "node dev.js",
+    "dev:server": "cd server && npm start",
+    "dev:client": "cd client && npm run dev",
+    "seed": "cd server && npm run seed",
+    "build": "cd client && npm run build"
+  },
+  "keywords": [
+    "kp4",
+    "pns",
+    "kepegawaian",
+    "surat-keterangan"
+  ],
+  "author": "",
+  "license": "ISC"
+}
