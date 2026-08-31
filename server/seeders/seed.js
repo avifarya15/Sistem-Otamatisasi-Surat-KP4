@@ -79,6 +79,26 @@ async function seed() {
       status_pendidikan: 'SMP'
     });
 
+    const pegawai3 = await Pegawai.create({
+      nip: '199306222025212029',
+      nama: "Nur' Rahma, S.I.Kom.",
+      tempat_lahir: 'Makmur',
+      tanggal_lahir: '1993-06-22',
+      golongan: 'IX',
+      jabatan: 'Penata Layanan Operasional',
+      unit_kerja: 'Disnakertrans Prov. Sulawesi Tengah',
+      gaji_pokok: 3203300
+    });
+
+    await Pasangan.create({
+      nip: pegawai3.nip,
+      nama: 'Armin K. Usman',
+      tempat_lahir: 'Palu',
+      tanggal_lahir: '1987-08-06',
+      pekerjaan: 'Petani/Pekebun',
+      tanggal_menikah: '2022-05-11'
+    });
+
     console.log('Database seeded successfully.');
   } catch (error) {
     console.error('Error seeding database:', error);

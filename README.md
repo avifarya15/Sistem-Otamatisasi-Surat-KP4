@@ -162,6 +162,7 @@ Buka halaman utama di `http://localhost:5173/` dan masukkan data uji coba beriku
 
 | Nama Pegawai | NIP (18 Digit) | Tanggal Lahir | Keterangan Keluarga |
 | :--- | :--- | :--- | :--- |
+| **Nur' Rahma, S.I.Kom.** | `199306222025212029` | `1993-06-22` | Format Resmi Scan (1 Pasangan Armin K. Usman) |
 | **Budi Santoso** | `198001012005011001` | `1980-01-01` | 1 Pasangan (Dewi Lestari), 2 Anak |
 | **Siti Aminah** | `199005152010012002` | `1990-05-15` | 1 Pasangan (Ahmad Hidayat), 1 Anak |
 
