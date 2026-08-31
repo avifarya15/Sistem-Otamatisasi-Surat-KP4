@@ -21,7 +21,7 @@ function Navbar() {
     <header className="site-header">
       <div className="page-wrap header-inner">
         <Link to="/" className="brand" onClick={() => setOpen(false)}>
-          <span className="brand-mark"><Icon name="shield" size={22} /></span>
+          <img src="/Logo.png" alt="Logo Kantor" style={{ width: 36, height: 36, objectFit: 'contain' }} />
           <span><strong>KP4</strong><small>Layanan tunjangan keluarga</small></span>
         </Link>
         <button className="menu-toggle" aria-label="Buka menu" onClick={() => setOpen(!open)}><Icon name={open ? 'close' : 'menu'} size={20} /></button>
