@@ -1,4 +1,5 @@
-const { Pegawai, Pasangan, Anak, LogAktivitas } = require('../models');
+const { Pegawai, Pasangan, Anak, LogAktivitas, Pengaturan } = require('../models');
+const { hitungMasaKerjaDanGaji, hitungTunjanganKeluarga, getGajiPokok, hitungKenaikanKgb, getPersenKgb, setPersenKgb } = require('../services/salaryService');
 
 const cleanBody = (obj) => {
   if (!obj || typeof obj !== 'object') return obj;
@@ -53,6 +54,13 @@ const getPegawaiByNip = async (req, res) => {
 const createPegawai = async (req, res) => {
   try {
     const payload = cleanBody(req.body);
+    // Jika gaji_pokok belum diisi tetapi golongan & mkg_tahun diisi, hitung otomatis (+3.15% per 2 thn acuan 2024)
+    if (!payload.gaji_pokok && payload.golongan && payload.mkg_tahun != null) {
+      const gajiOtomatis = getGajiPokok(payload.golongan, Number(payload.mkg_tahun));
+      if (gajiOtomatis) {
+        payload.gaji_pokok = gajiOtomatis;
+      }
+    }
     const data = await Pegawai.create(payload);
     await logActivity(req, `Create Pegawai NIP ${data.nip}`, payload);
     res.status(201).json(data);
@@ -67,6 +75,13 @@ const updatePegawai = async (req, res) => {
     const pegawai = await Pegawai.findOne({ where: { nip } });
     if (!pegawai) return res.status(404).json({ message: 'Not found' });
     const payload = cleanBody(req.body);
+    // Jika gaji_pokok kosong/null dan ada perubahan golongan & mkg_tahun, hitung otomatis
+    if (!payload.gaji_pokok && payload.golongan && payload.mkg_tahun != null) {
+      const gajiOtomatis = getGajiPokok(payload.golongan, Number(payload.mkg_tahun));
+      if (gajiOtomatis) {
+        payload.gaji_pokok = gajiOtomatis;
+      }
+    }
     await pegawai.update(payload);
     await logActivity(req, `Update Pegawai NIP ${nip}`, payload);
     res.json(pegawai);
@@ -178,9 +193,151 @@ const getLogs = async (req, res) => {
   }
 };
 
+// ========================= KGB ENDPOINTS =========================
+
+/**
+ * GET /api/admin/kgb/eligible
+ * Return list of pegawai whose KGB is due (≥ 2 years since tmt_kgb_terakhir or marked as Waktunya KGB)
+ */
+const getKgbEligible = async (req, res) => {
+  try {
+    const allPegawai = await Pegawai.findAll({
+      include: [{ model: Pasangan, as: 'pasangan' }, { model: Anak, as: 'anak' }],
+      order: [['nama', 'ASC']]
+    });
+
+    const eligible = [];
+    for (const p of allPegawai) {
+      const result = hitungMasaKerjaDanGaji(
+        p.golongan,
+        p.tmt_kgb_terakhir,
+        p.mkg_tahun || 0,
+        p.mkg_bulan || 0,
+        p.status_kgb
+      );
+      if (result.layakNaik) {
+        const jmlPasangan = p.pasangan ? p.pasangan.length : 0;
+        const jmlAnak = p.anak ? p.anak.length : 0;
+        const gajiBaru = result.gajiSetelahKgb || hitungKenaikanKgb(p.gaji_pokok);
+        const tunjangan = hitungTunjanganKeluarga(gajiBaru, jmlPasangan, jmlAnak);
+        eligible.push({
+          ...p.toJSON(),
+          kgb_info: {
+            ...result,
+            gajiPokokBaru: gajiBaru,
+            gajiPokokLama: Number(p.gaji_pokok) || 0,
+            mkgLama: p.mkg_tahun || 0,
+            mkgBaru: (p.mkg_tahun || 0) + 2,
+            ...tunjangan
+          }
+        });
+      }
+    }
+
+    res.json(eligible);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+/**
+ * POST /api/admin/kgb/process/:nip
+ * Process KGB for a specific pegawai: bump MKG +2, update gaji +3.15%, reset TMT
+ */
+const processKgb = async (req, res) => {
+  try {
+    const { nip } = req.params;
+    const pegawai = await Pegawai.findOne({
+      where: { nip },
+      include: [{ model: Pasangan, as: 'pasangan' }, { model: Anak, as: 'anak' }]
+    });
+    if (!pegawai) return res.status(404).json({ message: 'Pegawai tidak ditemukan' });
+
+    // Process: increase MKG by 2 years
+    const mkgLama = pegawai.mkg_tahun || 0;
+    const mkgBaru = mkgLama + 2;
+    // Hitung gaji baru: berdasarkan formula 3.15% per 2 tahun dari acuan 2024
+    const gajiBaru = getGajiPokok(pegawai.golongan, mkgBaru) || hitungKenaikanKgb(pegawai.gaji_pokok);
+    const today = new Date().toISOString().split('T')[0];
+
+    await pegawai.update({
+      mkg_tahun: mkgBaru,
+      mkg_bulan: pegawai.mkg_bulan || 0,
+      gaji_pokok: gajiBaru || pegawai.gaji_pokok,
+      tmt_kgb_terakhir: today,
+      status_kgb: 'Normal'
+    });
+
+    await logActivity(req, `Proses KGB (+3.15%) NIP ${nip}`, {
+      mkg_lama: mkgLama,
+      mkg_baru: mkgBaru,
+      gaji_lama: Number(pegawai.gaji_pokok),
+      gaji_baru: gajiBaru,
+      kenaikan_persen: '3.15%',
+      tmt_kgb_baru: today
+    });
+
+    // Return updated data with tunjangan info
+    const jmlPasangan = pegawai.pasangan ? pegawai.pasangan.length : 0;
+    const jmlAnak = pegawai.anak ? pegawai.anak.length : 0;
+    const tunjangan = hitungTunjanganKeluarga(gajiBaru || pegawai.gaji_pokok, jmlPasangan, jmlAnak);
+
+    res.json({
+      message: 'KGB berhasil diproses dengan kenaikan gaji 3.15%',
+      pegawai: pegawai.toJSON(),
+      kgb_result: {
+        mkg_baru: mkgBaru,
+        gaji_baru: gajiBaru,
+        tmt_kgb_baru: today,
+        ...tunjangan
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+const getSettings = async (req, res) => {
+  try {
+    res.json({
+      persen_kenaikan_kgb: getPersenKgb()
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+const updateSettings = async (req, res) => {
+  try {
+    const { persen_kenaikan_kgb } = req.body;
+    if (persen_kenaikan_kgb == null) {
+      return res.status(400).json({ message: 'persen_kenaikan_kgb wajib diisi' });
+    }
+    const val = Number(persen_kenaikan_kgb);
+    if (isNaN(val) || val <= 0) {
+      return res.status(400).json({ message: 'Nilai persentase harus angka positif' });
+    }
+    setPersenKgb(val);
+    await Pengaturan.upsert({
+      kunci: 'persen_kenaikan_kgb',
+      nilai: String(val),
+      keterangan: 'Persentase kenaikan gaji berkala tiap 2 tahun (%)'
+    });
+    await logActivity(req, `Update Persentase KGB menjadi ${val}%`, { persen_kenaikan_kgb: val });
+    res.json({
+      message: 'Pengaturan persentase kenaikan berhasil disimpan',
+      persen_kenaikan_kgb: getPersenKgb()
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   getAllPegawai, getPegawaiByNip, createPegawai, updatePegawai, deletePegawai,
   createPasangan, updatePasangan, deletePasangan,
   createAnak, updateAnak, deleteAnak,
-  getLogs
+  getLogs,
+  getKgbEligible, processKgb,
+  getSettings, updateSettings
 };

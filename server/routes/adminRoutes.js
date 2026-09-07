@@ -25,4 +25,12 @@ router.delete('/anak/:id', adminController.deleteAnak);
 // Log
 router.get('/logs', adminController.getLogs);
 
+// KGB (Kenaikan Gaji Berkala)
+router.get('/kgb/eligible', adminController.getKgbEligible);
+router.post('/kgb/process/:nip', adminController.processKgb);
+
+// Settings (Persentase Kenaikan KGB)
+router.get('/settings', adminController.getSettings);
+router.post('/settings', adminController.updateSettings);
+
 module.exports = router;

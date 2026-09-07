@@ -4,6 +4,7 @@ const Pasangan = require('./Pasangan');
 const Anak = require('./Anak');
 const Admin = require('./Admin');
 const LogAktivitas = require('./LogAktivitas');
+const Pengaturan = require('./Pengaturan');
 
 Pegawai.hasMany(Pasangan, { foreignKey: 'nip', sourceKey: 'nip', as: 'pasangan', onDelete: 'CASCADE' });
 Pegawai.hasMany(Anak, { foreignKey: 'nip', sourceKey: 'nip', as: 'anak', onDelete: 'CASCADE' });
@@ -18,5 +19,6 @@ module.exports = {
   Pasangan,
   Anak,
   Admin,
-  LogAktivitas
+  LogAktivitas,
+  Pengaturan
 };

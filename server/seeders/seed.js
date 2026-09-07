@@ -1,5 +1,5 @@
 const bcrypt = require('bcryptjs');
-const { sequelize, Admin, Pegawai, Pasangan, Anak } = require('../models');
+const { sequelize, Admin, Pegawai, Pasangan, Anak, Pengaturan } = require('../models');
 
 async function seed() {
   try {
@@ -12,6 +12,12 @@ async function seed() {
       role: 'super_admin'
     });
 
+    await Pengaturan.create({
+      kunci: 'persen_kenaikan_kgb',
+      nilai: '3.15',
+      keterangan: 'Persentase kenaikan gaji berkala tiap 2 tahun (%)'
+    });
+
     const pegawai1 = await Pegawai.create({
       nip: '198001012005011001',
       nama: 'Budi Santoso',
@@ -20,7 +26,12 @@ async function seed() {
       golongan: 'III/c',
       jabatan: 'Analis Kebijakan',
       unit_kerja: 'Biro Kepegawaian',
-      gaji_pokok: 3500000
+      gaji_pokok: 3288800,
+      tmt_cpns: '2005-01-01',
+      tmt_kgb_terakhir: '2024-01-01',
+      mkg_tahun: 18,
+      mkg_bulan: 0,
+      status_kgb: 'Waktunya KGB'
     });
 
     const pegawai2 = await Pegawai.create({
@@ -31,7 +42,12 @@ async function seed() {
       golongan: 'III/a',
       jabatan: 'Pranata Komputer',
       unit_kerja: 'Pusat Data dan Informasi',
-      gaji_pokok: 2800000
+      gaji_pokok: 3885200,
+      tmt_cpns: '2010-01-01',
+      tmt_kgb_terakhir: '2025-06-01',
+      mkg_tahun: 14,
+      mkg_bulan: 0,
+      status_kgb: 'Normal'
     });
 
     await Pasangan.create({
@@ -87,7 +103,12 @@ async function seed() {
       golongan: 'IX',
       jabatan: 'Penata Layanan Operasional',
       unit_kerja: 'Disnakertrans Prov. Sulawesi Tengah',
-      gaji_pokok: 3203300
+      gaji_pokok: 3203300,
+      tmt_cpns: '2025-02-01',
+      tmt_kgb_terakhir: '2025-02-01',
+      mkg_tahun: 0,
+      mkg_bulan: 0,
+      status_kgb: 'Normal'
     });
 
     await Pasangan.create({

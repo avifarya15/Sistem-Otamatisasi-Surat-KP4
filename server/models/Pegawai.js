@@ -29,6 +29,26 @@ const Pegawai = sequelize.define('Pegawai', {
   },
   gaji_pokok: {
     type: DataTypes.DECIMAL(15, 2)
+  },
+  tmt_cpns: {
+    type: DataTypes.DATEONLY,
+    allowNull: true
+  },
+  tmt_kgb_terakhir: {
+    type: DataTypes.DATEONLY,
+    allowNull: true
+  },
+  mkg_tahun: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  mkg_bulan: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  status_kgb: {
+    type: DataTypes.STRING(20),
+    defaultValue: 'Normal'
   }
 }, {
   tableName: 'pegawai',

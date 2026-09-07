@@ -4,11 +4,52 @@ import Icon from '../components/Icon';
 
 const dateOnly = (value) => value ? String(value).split('T')[0] : '';
 const prettyDate = (value) => value ? new Date(value).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-function Field({ label, children }) { return <label className="field-group"><span className="field-label">{label}</span>{children}</label>; }
-function EmptyState({ text }) { return <div className="empty-state"><span className="empty-icon"><Icon name="users" size={21} /></span><p>{text}</p></div>; }
+const formatRupiah = (val) => val == null ? '—' : 'Rp ' + Number(val).toLocaleString('id-ID');
+
+// Tabel dasar 2024 untuk client-side helper
+const GAJI_DASAR_2024 = {
+  'I/a': 1685700, 'I/b': 1840800, 'I/c': 1918700, 'I/d': 1999900,
+  'II/a': 2184000, 'II/b': 2385000, 'II/c': 2485900, 'II/d': 2591100,
+  'III/a': 2785700, 'III/b': 2903600, 'III/c': 3026400, 'III/d': 3154400,
+  'IV/a': 3287800, 'IV/b': 3426900, 'IV/c': 3571900, 'IV/d': 3723000, 'IV/e': 3880400,
+  'IX': 3203300
+};
+
+const hitungGajiOtomatis2024 = (golongan, mkgTahun, persenRate = 3.15) => {
+  if (!golongan) return null;
+  const trimmed = String(golongan).trim();
+  const parts = trimmed.split('/');
+  const norm = parts.length === 2 ? `${parts[0].toUpperCase()}/${parts[1].toLowerCase()}` : trimmed.toUpperCase();
+  const base = GAJI_DASAR_2024[norm];
+  if (!base) return null;
+  const steps = Math.floor(Math.max(0, Number(mkgTahun) || 0) / 2);
+  const rate = (Number(persenRate) || 3.15) / 100;
+  return Math.round(base * Math.pow(1 + rate, steps));
+};
+
+function Field({ label, hint, children }) {
+  return (
+    <label className="field-group">
+      <span className="field-label">{label}</span>
+      {children}
+      {hint && <span className="field-hint">{hint}</span>}
+    </label>
+  );
+}
+
+function EmptyState({ text }) {
+  return (
+    <div className="empty-state">
+      <span className="empty-icon"><Icon name="users" size={21} /></span>
+      <p>{text}</p>
+    </div>
+  );
+}
 
 function DashboardPage() {
   const [pegawaiList, setPegawaiList] = useState([]);
+  const [kgbEligibleList, setKgbEligibleList] = useState([]);
+  const [activeTab, setActiveTab] = useState('direktori'); // 'direktori' | 'kgb' | 'pengaturan'
   const [selectedNip, setSelectedNip] = useState(null);
   const [selectedPegawai, setSelectedPegawai] = useState(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -16,6 +57,11 @@ function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
   const [query, setQuery] = useState('');
+
+  // Pengaturan persentase KGB oleh admin/sistem
+  const [persenSetting, setPersenSetting] = useState(3.15);
+  const [savingSetting, setSavingSetting] = useState(false);
+  const [settingMsg, setSettingMsg] = useState('');
 
   const [formPasangan, setFormPasangan] = useState({});
   const [isAddingPasangan, setIsAddingPasangan] = useState(false);
@@ -26,6 +72,8 @@ function DashboardPage() {
 
   useEffect(() => {
     fetchPegawaiList();
+    fetchKgbEligible();
+    fetchSettings();
   }, [refresh]);
 
   const fetchPegawaiList = async () => {
@@ -37,6 +85,41 @@ function DashboardPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchKgbEligible = async () => {
+    try {
+      const res = await api.get('/admin/kgb/eligible');
+      setKgbEligibleList(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const res = await api.get('/admin/settings');
+      if (res.data.persen_kenaikan_kgb != null) {
+        setPersenSetting(Number(res.data.persen_kenaikan_kgb));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSaveSetting = async (e) => {
+    e.preventDefault();
+    setSavingSetting(true);
+    setSettingMsg('');
+    try {
+      const res = await api.post('/admin/settings', { persen_kenaikan_kgb: persenSetting });
+      setSettingMsg(res.data.message || 'Pengaturan persentase berhasil disimpan!');
+      setRefresh(v => v + 1);
+    } catch (err) {
+      window.alert(err.response?.data?.message || 'Gagal menyimpan pengaturan');
+    } finally {
+      setSavingSetting(false);
     }
   };
 
@@ -53,7 +136,12 @@ function DashboardPage() {
         golongan: res.data.golongan,
         jabatan: res.data.jabatan,
         unit_kerja: res.data.unit_kerja,
-        gaji_pokok: res.data.gaji_pokok
+        gaji_pokok: res.data.gaji_pokok,
+        tmt_cpns: res.data.tmt_cpns || '',
+        tmt_kgb_terakhir: res.data.tmt_kgb_terakhir || '',
+        mkg_tahun: res.data.mkg_tahun ?? 0,
+        mkg_bulan: res.data.mkg_bulan ?? 0,
+        status_kgb: res.data.status_kgb || 'Normal'
       });
       setIsAdding(false);
       setIsAddingPasangan(false);
@@ -65,21 +153,64 @@ function DashboardPage() {
     }
   };
 
-  const updatePegawai = (key, value) => setFormPegawai({ ...formPegawai, [key]: value });
+  const updatePegawai = (key, value) => {
+    setFormPegawai(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleMkgTahunChange = (e) => {
+    const val = e.target.value === '' ? '' : Number(e.target.value);
+    setFormPegawai(prev => {
+      const updated = { ...prev, mkg_tahun: val };
+      if (val !== '' && prev.golongan && !prev._manualGaji) {
+        const autoGaji = hitungGajiOtomatis2024(prev.golongan, val, persenSetting);
+        if (autoGaji) updated.gaji_pokok = autoGaji;
+      }
+      return updated;
+    });
+  };
+
+  const handleGolonganChange = (e) => {
+    const val = e.target.value;
+    setFormPegawai(prev => {
+      const updated = { ...prev, golongan: val };
+      if (val && prev.mkg_tahun != null && !prev._manualGaji) {
+        const autoGaji = hitungGajiOtomatis2024(val, prev.mkg_tahun, persenSetting);
+        if (autoGaji) updated.gaji_pokok = autoGaji;
+      }
+      return updated;
+    });
+  };
+
+  const handleHitungOtomatisGaji = () => {
+    const calc = hitungGajiOtomatis2024(formPegawai.golongan, formPegawai.mkg_tahun, persenSetting);
+    if (calc) {
+      updatePegawai('gaji_pokok', calc);
+      updatePegawai('_manualGaji', false);
+    } else {
+      window.alert('Golongan tidak dikenali atau masa kerja belum diisi.');
+    }
+  };
 
   const handleSavePegawai = async (e) => {
     e.preventDefault();
     try {
+      const payload = {
+        ...formPegawai,
+        mkg_tahun: Number(formPegawai.mkg_tahun) || 0,
+        mkg_bulan: Number(formPegawai.mkg_bulan) || 0
+      };
+      delete payload._manualGaji;
+
       if (isAdding) {
-        await api.post('/admin/pegawai', formPegawai);
+        await api.post('/admin/pegawai', payload);
         window.alert('Pegawai berhasil ditambahkan');
         setIsAdding(false);
       } else {
-        await api.put(`/admin/pegawai/${formPegawai.nip}`, formPegawai);
+        await api.put(`/admin/pegawai/${payload.nip}`, payload);
         window.alert('Data pegawai berhasil diperbarui');
       }
       setRefresh(v => v + 1);
-      if (formPegawai.nip) loadPegawaiDetail(formPegawai.nip);
+      if (payload.nip) loadPegawaiDetail(payload.nip);
     } catch (err) {
       window.alert(err.response?.data?.message || 'Gagal menyimpan data pegawai');
     }
@@ -97,6 +228,18 @@ function DashboardPage() {
       window.alert('Pegawai berhasil dihapus');
     } catch {
       window.alert('Gagal menghapus data pegawai');
+    }
+  };
+
+  const handleProcessKgb = async (nip, nama) => {
+    if (!window.confirm(`Proses Kenaikan Gaji Berkala (KGB +${persenSetting}% & MKG +2 Tahun) untuk ${nama} (${nip})?`)) return;
+    try {
+      const res = await api.post(`/admin/kgb/process/${nip}`);
+      window.alert(res.data.message || 'KGB berhasil diproses!');
+      setRefresh(v => v + 1);
+      if (selectedNip === nip) loadPegawaiDetail(nip);
+    } catch (err) {
+      window.alert(err.response?.data?.message || 'Gagal memproses KGB');
     }
   };
 
@@ -157,105 +300,288 @@ function DashboardPage() {
     }
   };
 
-  const filtered = useMemo(() => pegawaiList.filter(p => `${p.nama} ${p.nip} ${p.unit_kerja}`.toLowerCase().includes(query.toLowerCase())), [pegawaiList, query]);
+  const filtered = useMemo(() => pegawaiList.filter(p => `${p.nama} ${p.nip} ${p.unit_kerja} ${p.golongan}`.toLowerCase().includes(query.toLowerCase())), [pegawaiList, query]);
 
   return (
     <main className="admin-main page-wrap">
       <div className="admin-heading">
         <div>
           <div className="eyebrow">Workspace administrasi</div>
-          <h1 className="display-font">Data pegawai</h1>
-          <p>Kelola informasi pegawai dan keluarga dalam satu ruang kerja.</p>
+          <h1 className="display-font">Manajemen Pegawai & KGB</h1>
+          <p>Kelola data pegawai, masa kerja golongan (MKG), dan kenaikan gaji berkala ({persenSetting}% per 2 tahun).</p>
         </div>
-        <button className="btn-primary" onClick={() => { setIsAdding(true); setSelectedPegawai(null); setSelectedNip(null); setFormPegawai({}); }}>
+        <button className="btn-primary" onClick={() => { setIsAdding(true); setSelectedPegawai(null); setSelectedNip(null); setFormPegawai({ mkg_tahun: 0, mkg_bulan: 0, status_kgb: 'Normal' }); }}>
           <Icon name="plus" size={17} /> Pegawai baru
         </button>
       </div>
 
       <div className="metric-row">
-        <div className="metric-card">
+        <div className="metric-card" onClick={() => setActiveTab('direktori')} style={{ cursor: 'pointer' }}>
           <span className="metric-icon teal"><Icon name="users" size={19} /></span>
           <div>
             <small>Total pegawai</small>
             <strong>{pegawaiList.length}</strong>
           </div>
         </div>
-        <div className="metric-card">
-          <span className="metric-icon terracotta"><Icon name="file" size={19} /></span>
+        <div className="metric-card" onClick={() => setActiveTab('kgb')} style={{ cursor: 'pointer' }}>
+          <span className={`metric-icon ${kgbEligibleList.length > 0 ? 'terracotta' : 'teal'}`}>
+            <Icon name="file" size={19} />
+          </span>
           <div>
-            <small>Siap dilayani</small>
-            <strong>{pegawaiList.length}<i> aktif</i></strong>
+            <small>Waktunya KGB ({persenSetting}%)</small>
+            <strong>
+              {kgbEligibleList.length}
+              {kgbEligibleList.length > 0 ? <i style={{ color: '#d36b4b', fontWeight: 'bold' }}> perlu proses</i> : <i> siap</i>}
+            </strong>
           </div>
         </div>
-        <div className="metric-card metric-note">
+        <div className="metric-card metric-note" onClick={() => setActiveTab('pengaturan')} style={{ cursor: 'pointer' }}>
           <span className="tiny-dot" />
           <div>
-            <small>Status sistem</small>
-            <strong>Berjalan normal</strong>
+            <small>Aturan Kenaikan Sistem</small>
+            <strong style={{ fontSize: '0.9rem' }}>+{persenSetting}% tiap 2 thn (Acuan 2024)</strong>
           </div>
         </div>
+      </div>
+
+      {/* TAB NAVIGATION */}
+      <div className="admin-tabs">
+        <button
+          className={`tab-btn ${activeTab === 'direktori' ? 'active' : ''}`}
+          onClick={() => setActiveTab('direktori')}
+        >
+          <Icon name="users" size={16} /> Direktori Pegawai ({pegawaiList.length})
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'kgb' ? 'active' : ''}`}
+          onClick={() => setActiveTab('kgb')}
+        >
+          <Icon name="file" size={16} /> Pemberitahuan KGB
+          {kgbEligibleList.length > 0 && <span className="tab-badge">{kgbEligibleList.length}</span>}
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'pengaturan' ? 'active' : ''}`}
+          onClick={() => setActiveTab('pengaturan')}
+        >
+          <Icon name="shield" size={16} /> Aturan Kenaikan ({persenSetting}%)
+        </button>
       </div>
 
       <div className="admin-grid">
-        <section className="soft-card directory-card">
-          <div className="section-head">
-            <div>
-              <h2>Direktori pegawai</h2>
-              <p>Pilih nama untuk melihat dan mengelola detail.</p>
+        {/* TAB 1: DIREKTORI PEGAWAI */}
+        {activeTab === 'direktori' && (
+          <section className="soft-card directory-card">
+            <div className="section-head">
+              <div>
+                <h2>Direktori pegawai</h2>
+                <p>Pilih nama untuk melihat profil, masa kerja, dan detail keluarga.</p>
+              </div>
+              <div className="search-box">
+                <Icon name="search" size={16} />
+                <input placeholder="Cari nama, NIP, atau golongan…" value={query} onChange={e => setQuery(e.target.value)} />
+              </div>
             </div>
-            <div className="search-box">
-              <Icon name="search" size={16} />
-              <input placeholder="Cari nama atau NIP…" value={query} onChange={e => setQuery(e.target.value)} />
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Nama & NIP</th>
+                    <th>Golongan</th>
+                    <th>Masa Kerja (MKG)</th>
+                    <th>Gaji Pokok</th>
+                    <th>Status KGB</th>
+                    <th>Unit kerja</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr><td colSpan="7"><div className="loading-state">Memuat direktori…</div></td></tr>
+                  ) : filtered.length === 0 ? (
+                    <tr><td colSpan="7"><EmptyState text="Belum ada data yang cocok." /></td></tr>
+                  ) : (
+                    filtered.map(p => (
+                      <tr key={p.nip} className={selectedNip === p.nip ? 'active' : ''}>
+                        <td>
+                          <strong className="person-name">{p.nama}</strong>
+                          <span className="person-nip">{p.nip}</span>
+                        </td>
+                        <td><span className="grade-pill">{p.golongan || '—'}</span></td>
+                        <td>
+                          <strong>{p.mkg_tahun ?? 0} Thn</strong> {p.mkg_bulan ?? 0} Bln
+                        </td>
+                        <td>{formatRupiah(p.gaji_pokok)}</td>
+                        <td>
+                          {p.status_kgb === 'Waktunya KGB' ? (
+                            <span className="status-pill warning" title={`Masa kerja mencapai 2 tahun sejak KGB terakhir (+${persenSetting}%)`}>
+                              Waktunya KGB
+                            </span>
+                          ) : (
+                            <span className="status-pill success">Normal</span>
+                          )}
+                        </td>
+                        <td>{p.unit_kerja || '—'}</td>
+                        <td>
+                          <button className="table-action" onClick={() => loadPegawaiDetail(p.nip)}>Buka</button>
+                          <button className="icon-action danger" aria-label="Hapus" onClick={() => handleDeletePegawai(p.nip)}>
+                            <Icon name="trash" size={15} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Nama & NIP</th>
-                  <th>Golongan</th>
-                  <th>Jabatan</th>
-                  <th>Unit kerja</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan="5"><div className="loading-state">Memuat direktori…</div></td></tr>
-                ) : filtered.length === 0 ? (
-                  <tr><td colSpan="5"><EmptyState text="Belum ada data yang cocok." /></td></tr>
-                ) : (
-                  filtered.map(p => (
-                    <tr key={p.nip} className={selectedNip === p.nip ? 'active' : ''}>
-                      <td>
-                        <strong className="person-name">{p.nama}</strong>
-                        <span className="person-nip">{p.nip}</span>
-                      </td>
-                      <td><span className="grade-pill">{p.golongan || '—'}</span></td>
-                      <td>{p.jabatan || '—'}</td>
-                      <td>{p.unit_kerja || '—'}</td>
-                      <td>
-                        <button className="table-action" onClick={() => loadPegawaiDetail(p.nip)}>Buka</button>
-                        <button className="icon-action danger" aria-label="Hapus" onClick={() => handleDeletePegawai(p.nip)}>
-                          <Icon name="trash" size={15} />
+          </section>
+        )}
+
+        {/* TAB 2: PEMBERITAHUAN KGB */}
+        {activeTab === 'kgb' && (
+          <section className="soft-card kgb-card-section">
+            <div className="section-head">
+              <div>
+                <h2>Pemberitahuan Kenaikan Gaji Berkala (KGB)</h2>
+                <p>Pegawai yang telah memenuhi masa kerja 2 tahun berhak mendapatkan kenaikan gaji pokok sebesar {persenSetting}%.</p>
+              </div>
+            </div>
+
+            {kgbEligibleList.length === 0 ? (
+              <div className="empty-state">
+                <span className="empty-icon"><Icon name="check" size={21} /></span>
+                <p>Semua pegawai berstatus Normal. Belum ada pegawai yang jatuh tempo KGB (2 tahun).</p>
+              </div>
+            ) : (
+              <div className="kgb-grid">
+                {kgbEligibleList.map(p => {
+                  const info = p.kgb_info || {};
+                  return (
+                    <div key={p.nip} className="kgb-item-card">
+                      <div className="kgb-card-head">
+                        <div>
+                          <strong className="person-name" style={{ fontSize: '1rem' }}>{p.nama}</strong>
+                          <span className="person-nip">NIP: {p.nip} · Golongan {p.golongan}</span>
+                        </div>
+                        <span className="status-pill warning">Jatuh Tempo KGB</span>
+                      </div>
+
+                      <div className="kgb-compare-box">
+                        <div className="kgb-col">
+                          <small>Masa Kerja Saat Ini</small>
+                          <strong>{p.mkg_tahun ?? 0} Tahun {p.mkg_bulan ?? 0} Bulan</strong>
+                          <span className="kgb-sub">Gaji Pokok: {formatRupiah(p.gaji_pokok)}</span>
+                        </div>
+                        <div className="kgb-arrow">➔</div>
+                        <div className="kgb-col highlight">
+                          <small>Setelah KGB (+{persenSetting}%)</small>
+                          <strong>{info.mkgBaru ?? ((p.mkg_tahun || 0) + 2)} Tahun</strong>
+                          <span className="kgb-sub high">{formatRupiah(info.gajiPokokBaru)}</span>
+                        </div>
+                      </div>
+
+                      <div className="kgb-family-estimate">
+                        <small>Estimasi Total Bruto (Gaji + Tunjangan Keluarga):</small>
+                        <strong>{formatRupiah(info.totalBruto)}</strong>
+                        <span>(Tunjangan Pasangan: {formatRupiah(info.tunjanganPasangan)}, Tunjangan Anak: {formatRupiah(info.tunjanganAnak)})</span>
+                      </div>
+
+                      <div className="kgb-card-actions">
+                        <button className="btn-teal" onClick={() => handleProcessKgb(p.nip, p.nama)}>
+                          <Icon name="check" size={16} /> Proses KGB (+{persenSetting}%)
                         </button>
-                      </td>
-                    </tr>
-                  ))
+                        <button className="btn-ghost small" onClick={() => loadPegawaiDetail(p.nip)}>
+                          Lihat Profil
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* TAB 3: PENGATURAN PERSENTASE KENAIKAN SISTEM */}
+        {activeTab === 'pengaturan' && (
+          <section className="soft-card">
+            <div className="section-head">
+              <div>
+                <h2>Pengaturan Persentase Kenaikan Gaji Berkala (KGB)</h2>
+                <p>Atur persentase kenaikan gaji yang diterapkan pada sistem tiap 2 tahun masa kerja (berbasis data acuan 2024).</p>
+              </div>
+            </div>
+
+            <div className="settings-wrap">
+              <div className="settings-box">
+                <h3>Persentase Kenaikan per 2 Tahun</h3>
+                <p>Nilai ini digunakan oleh sistem untuk menghitung gaji pokok otomatis saat user memasukkan masa kerja di portal dan saat proses KGB dilakukan.</p>
+
+                <form onSubmit={handleSaveSetting}>
+                  <div className="settings-form-row">
+                    <Field label="Besaran Kenaikan (%)" hint="Default: 3.15%">
+                      <input
+                        className="field-input"
+                        type="number"
+                        step="0.01"
+                        min="0.1"
+                        max="25"
+                        value={persenSetting}
+                        onChange={e => setPersenSetting(Number(e.target.value))}
+                        required
+                        style={{ maxWidth: '160px' }}
+                      />
+                    </Field>
+                    <button className="btn-teal" type="submit" disabled={savingSetting}>
+                      {savingSetting ? 'Menyimpan…' : 'Simpan Pengaturan'}
+                    </button>
+                  </div>
+                </form>
+
+                {settingMsg && (
+                  <div className="success-toast">
+                    <Icon name="check" size={16} /> {settingMsg}
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+
+                <div style={{ marginTop: '24px' }}>
+                  <h4 style={{ margin: '0 0 8px', fontSize: '0.88rem', color: 'var(--navy)' }}>Simulasi Gaji Acuan 2024 dengan Kenaikan {persenSetting}% per 2 Tahun:</h4>
+                  <table className="settings-preview-table">
+                    <thead>
+                      <tr>
+                        <th>Golongan</th>
+                        <th>MKG 0 Thn</th>
+                        <th>MKG 2 Thn (+{persenSetting}%)</th>
+                        <th>MKG 4 Thn</th>
+                        <th>MKG 6 Thn</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {['I/a', 'II/a', 'III/a', 'III/c', 'IV/a', 'IX'].map(gol => (
+                        <tr key={gol}>
+                          <td><strong>{gol}</strong></td>
+                          <td>{formatRupiah(hitungGajiOtomatis2024(gol, 0, persenSetting))}</td>
+                          <td style={{ color: 'var(--teal)', fontWeight: 'bold' }}>{formatRupiah(hitungGajiOtomatis2024(gol, 2, persenSetting))}</td>
+                          <td>{formatRupiah(hitungGajiOtomatis2024(gol, 4, persenSetting))}</td>
+                          <td>{formatRupiah(hitungGajiOtomatis2024(gol, 6, persenSetting))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
       </div>
 
+      {/* DETAIL PEGAWAI / TAMBAH PEGAWAI */}
       {(selectedPegawai || isAdding) && (
         <section className="soft-card detail-card fade-up">
           <div className="detail-header">
             <div>
               <div className="eyebrow">{isAdding ? 'Data baru' : 'Profil pegawai'}</div>
               <h2>{isAdding ? 'Tambah pegawai' : selectedPegawai.nama}</h2>
-              <p>{isAdding ? 'Lengkapi informasi dasar pegawai.' : `NIP ${selectedPegawai.nip} · ${selectedPegawai.unit_kerja || 'Unit kerja belum diisi'}`}</p>
+              <p>{isAdding ? 'Lengkapi informasi pegawai, masa kerja golongan, dan gaji.' : `NIP ${selectedPegawai.nip} · ${selectedPegawai.unit_kerja || 'Unit kerja belum diisi'}`}</p>
             </div>
             <button className="close-detail" onClick={() => { setIsAdding(false); setSelectedPegawai(null); setSelectedNip(null); }}>
               <Icon name="close" size={18} />
@@ -275,8 +601,9 @@ function DashboardPage() {
             <Field label="Tanggal lahir">
               <input className="field-input" type="date" value={dateOnly(formPegawai.tanggal_lahir)} onChange={e => updatePegawai('tanggal_lahir', e.target.value)} required />
             </Field>
-            <Field label="Golongan">
-              <input className="field-input" value={formPegawai.golongan || ''} onChange={e => updatePegawai('golongan', e.target.value)} placeholder="III/c" />
+
+            <Field label="Golongan" hint="Contoh: III/a, III/c, IV/a, IX">
+              <input className="field-input" value={formPegawai.golongan || ''} onChange={handleGolonganChange} placeholder="III/c" />
             </Field>
             <Field label="Jabatan">
               <input className="field-input" value={formPegawai.jabatan || ''} onChange={e => updatePegawai('jabatan', e.target.value)} />
@@ -284,10 +611,68 @@ function DashboardPage() {
             <Field label="Unit kerja">
               <input className="field-input" value={formPegawai.unit_kerja || ''} onChange={e => updatePegawai('unit_kerja', e.target.value)} />
             </Field>
-            <Field label="Gaji pokok (Rp)">
-              <input className="field-input" type="number" value={formPegawai.gaji_pokok || ''} onChange={e => updatePegawai('gaji_pokok', e.target.value)} />
+
+            {/* INPUT MASA KERJA OLEH USER */}
+            <Field label="Masa Kerja Golongan (Tahun)" hint="Diinput langsung oleh user (0–40)">
+              <input
+                className="field-input"
+                type="number"
+                min="0"
+                max="40"
+                value={formPegawai.mkg_tahun ?? ''}
+                onChange={handleMkgTahunChange}
+                required
+              />
             </Field>
-            <div className="form-actions">
+            <Field label="Masa Kerja Golongan (Bulan)" hint="Diinput langsung oleh user (0–11)">
+              <input
+                className="field-input"
+                type="number"
+                min="0"
+                max="11"
+                value={formPegawai.mkg_bulan ?? ''}
+                onChange={e => updatePegawai('mkg_bulan', e.target.value === '' ? '' : Number(e.target.value))}
+              />
+            </Field>
+
+            <Field label="TMT CPNS / Pengangkatan">
+              <input className="field-input" type="date" value={dateOnly(formPegawai.tmt_cpns)} onChange={e => updatePegawai('tmt_cpns', e.target.value)} />
+            </Field>
+            <Field label="TMT KGB Terakhir">
+              <input className="field-input" type="date" value={dateOnly(formPegawai.tmt_kgb_terakhir)} onChange={e => updatePegawai('tmt_kgb_terakhir', e.target.value)} />
+            </Field>
+
+            <Field label="Status KGB">
+              <select className="field-input" value={formPegawai.status_kgb || 'Normal'} onChange={e => updatePegawai('status_kgb', e.target.value)}>
+                <option value="Normal">Normal</option>
+                <option value="Waktunya KGB">Waktunya KGB (Perlu Kenaikan {persenSetting}%)</option>
+              </select>
+            </Field>
+
+            <Field label="Gaji Pokok (Rp)" hint="Bisa diinput manual atau dihitung otomatis">
+              <div className="salary-input-wrap">
+                <input
+                  className="field-input"
+                  type="number"
+                  value={formPegawai.gaji_pokok || ''}
+                  onChange={e => {
+                    updatePegawai('gaji_pokok', e.target.value);
+                    updatePegawai('_manualGaji', true);
+                  }}
+                  required
+                />
+                <button
+                  type="button"
+                  className="btn-helper-calc"
+                  onClick={handleHitungOtomatisGaji}
+                  title={`Hitung otomatis berdasarkan acuan 2024 dengan kenaikan ${persenSetting}% per 2 tahun masa kerja`}
+                >
+                  Hitung {persenSetting}%
+                </button>
+              </div>
+            </Field>
+
+            <div className="form-actions" style={{ gridColumn: 'span 2' }}>
               <button className="btn-primary" type="submit"><Icon name="check" size={16} /> Simpan data</button>
               <button className="btn-ghost" type="button" onClick={() => { setIsAdding(false); setSelectedPegawai(null); }}>Batal</button>
             </div>

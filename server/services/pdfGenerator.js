@@ -1,4 +1,5 @@
 const PDFDocument = require('pdfkit');
+const { hitungTunjanganKeluarga } = require('./salaryService');
 
 const generateKP4 = (data, res) => {
   const doc = new PDFDocument({
@@ -87,12 +88,16 @@ const generateKP4 = (data, res) => {
   drawRow('7.', 'Jabatan Struktural/Fungsional', data.jabatan || 'Penata Layanan Operasional');
   drawRow('8.', 'Pada Instansi', data.unit_kerja || 'Disnakertrans Prov. Sulawesi Tengah');
   
-  // Masa kerja
+  // Masa kerja - use actual MKG data
+  const mkgTahun = data.mkg_tahun != null ? data.mkg_tahun : 0;
+  const mkgBulan = data.mkg_bulan != null ? data.mkg_bulan : 0;
+  const mkgText = `${mkgTahun} Tahun ${mkgBulan} Bulan`;
+
   const startY9 = doc.y;
   doc.font('Helvetica-Bold').fontSize(8).text('9.', leftX, startY9);
   doc.text('Masa Kerja Golongan', leftX + 16, startY9);
   doc.text(':', leftX + 165, startY9);
-  doc.font('Helvetica').text(data.masa_kerja_golongan || '0 Tahun 10 Bulan', leftX + 172, startY9);
+  doc.font('Helvetica').text(mkgText, leftX + 172, startY9);
   doc.y = startY9 + 11;
   
   doc.font('Helvetica').fontSize(8).text('Masa Kerja Tambahan', leftX + 172, doc.y);
@@ -102,7 +107,7 @@ const generateKP4 = (data, res) => {
 
   doc.font('Helvetica').fontSize(8).text('Masa Kerja Seluruhnya', leftX + 172, doc.y);
   doc.text(':', leftX + 270, doc.y);
-  doc.text(data.masa_kerja_seluruhnya || '0 Tahun 10 Bulan', leftX + 278, doc.y);
+  doc.text(data.masa_kerja_seluruhnya || mkgText, leftX + 278, doc.y);
   doc.y += 12;
 
   // Digaji menurut
@@ -110,13 +115,33 @@ const generateKP4 = (data, res) => {
   doc.font('Helvetica-Bold').fontSize(8).text('10.', leftX, startY10);
   doc.text('Digaji menurut', leftX + 16, startY10);
   doc.text(':', leftX + 165, startY10);
-  doc.font('Helvetica').text(data.peraturan_gaji || 'PEPRES. No. 11 Tahun 2024', leftX + 172, startY10);
+  doc.font('Helvetica').text(data.peraturan_gaji || 'PP No. 5 Tahun 2024', leftX + 172, startY10);
   doc.y = startY10 + 11;
 
   doc.font('Helvetica-Bold').fontSize(8).text('Dengan Gaji Pokok', leftX + 172, doc.y);
   doc.text(':', leftX + 260, doc.y);
   doc.font('Helvetica-Bold').text(`Rp. ${formatRupiah(data.gaji_pokok)}.-`, leftX + 268, doc.y);
   doc.y += 12;
+
+  // Rincian Tunjangan Keluarga
+  const jmlPasangan = (data.pasangan && data.pasangan.length > 0) ? 1 : 0;
+  const jmlAnak = (data.anak && data.anak.length) || 0;
+  const tunjangan = hitungTunjanganKeluarga(data.gaji_pokok, jmlPasangan, jmlAnak);
+
+  doc.font('Helvetica').fontSize(8).text('Tunjangan Suami/Istri (10%)', leftX + 172, doc.y);
+  doc.text(':', leftX + 310, doc.y);
+  doc.text(`Rp. ${formatRupiah(tunjangan.tunjanganPasangan)}.-`, leftX + 318, doc.y);
+  doc.y += 11;
+
+  doc.font('Helvetica').fontSize(8).text(`Tunjangan Anak (2% x ${Math.min(jmlAnak, 2)} anak)`, leftX + 172, doc.y);
+  doc.text(':', leftX + 310, doc.y);
+  doc.text(`Rp. ${formatRupiah(tunjangan.tunjanganAnak)}.-`, leftX + 318, doc.y);
+  doc.y += 11;
+
+  doc.font('Helvetica-Bold').fontSize(8).text('Total Pembayaran', leftX + 172, doc.y);
+  doc.text(':', leftX + 310, doc.y);
+  doc.font('Helvetica-Bold').text(`Rp. ${formatRupiah(tunjangan.totalBruto)}.-`, leftX + 318, doc.y);
+  doc.y += 14;
 
   drawRow('11.', 'Alamat/Tempat tinggal', data.alamat || 'Jl. Tadulako Palu');
   doc.moveDown(0.3);
@@ -264,4 +289,3 @@ const generateKP4 = (data, res) => {
 };
 
 module.exports = { generateKP4 };
-
