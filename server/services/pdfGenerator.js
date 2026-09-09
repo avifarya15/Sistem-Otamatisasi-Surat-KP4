@@ -66,19 +66,22 @@ const generateKP4 = (data, res) => {
     doc.font('Helvetica-Bold').fontSize(8).text(num, leftX, startY);
     doc.text(label, leftX + 16, startY);
     doc.text(':', leftX + 165, startY);
-    doc.font('Helvetica').text(String(value || '-'), leftX + 172, startY, { continued: false });
+
+    let valWidth = extraLabel ? 135 : 350;
+    doc.font('Helvetica').text(String(value || '-'), leftX + 172, startY, { width: valWidth });
+    let nextY = doc.y;
 
     if (extraLabel && extraVal) {
       doc.font('Helvetica-Bold').text(extraLabel, leftX + 310, startY);
-      doc.font('Helvetica').text(extraVal, leftX + 375, startY);
+      doc.font('Helvetica').text(extraVal, leftX + 375, startY, { lineBreak: false });
     }
-    doc.y = Math.max(doc.y, startY + 11.5);
+    doc.y = Math.max(nextY, startY + 12);
   };
 
   const birthPlaceDate = [data.tempat_lahir, formatDate(data.tanggal_lahir)].filter(Boolean).join(', ') || '-';
   const jenisKelamin = data.jenis_kelamin || (data.nama && (data.nama.toLowerCase().includes('siti') || data.nama.toLowerCase().includes('dewi') || data.nama.toLowerCase().includes('nur') || data.nama.toLowerCase().includes('rahma')) ? 'Perempuan' : 'Laki-laki');
   const nipLabel = (data.nip && data.nip.length >= 18) ? 'NIP/NIPPPK.' : 'NIP.';
-  
+
   drawRow('1.', 'Nama Lengkap', data.nama || '-', nipLabel, data.nip || '-');
   drawRow('2.', 'Tempat/Tanggal Lahir', birthPlaceDate);
   drawRow('3.', 'Jenis Kelamin', jenisKelamin);
@@ -87,61 +90,67 @@ const generateKP4 = (data, res) => {
   drawRow('6.', 'Pangkat/Golongan Ruang', data.golongan || 'IX');
   drawRow('7.', 'Jabatan Struktural/Fungsional', data.jabatan || 'Penata Layanan Operasional');
   drawRow('8.', 'Pada Instansi', data.unit_kerja || 'Disnakertrans Prov. Sulawesi Tengah');
-  
-  // Masa kerja - use actual MKG data
+
+  // Masa kerja
   const mkgTahun = data.mkg_tahun != null ? data.mkg_tahun : 0;
   const mkgBulan = data.mkg_bulan != null ? data.mkg_bulan : 0;
   const mkgText = `${mkgTahun} Tahun ${mkgBulan} Bulan`;
 
-  const startY9 = doc.y;
-  doc.font('Helvetica-Bold').fontSize(8).text('9.', leftX, startY9);
-  doc.text('Masa Kerja Golongan', leftX + 16, startY9);
-  doc.text(':', leftX + 165, startY9);
-  doc.font('Helvetica').text(mkgText, leftX + 172, startY9);
-  doc.y = startY9 + 11;
-  
-  doc.font('Helvetica').fontSize(8).text('Masa Kerja Tambahan', leftX + 172, doc.y);
-  doc.text(':', leftX + 270, doc.y);
-  doc.text(data.masa_kerja_tambahan || '- Tahun', leftX + 278, doc.y);
-  doc.y += 11;
+  let curY = doc.y;
+  doc.font('Helvetica-Bold').fontSize(8).text('9.', leftX, curY);
+  doc.text('Masa Kerja Golongan', leftX + 16, curY);
+  doc.text(':', leftX + 165, curY);
+  doc.font('Helvetica').text(mkgText, leftX + 172, curY);
+  doc.y = curY + 11;
 
-  doc.font('Helvetica').fontSize(8).text('Masa Kerja Seluruhnya', leftX + 172, doc.y);
-  doc.text(':', leftX + 270, doc.y);
-  doc.text(data.masa_kerja_seluruhnya || mkgText, leftX + 278, doc.y);
-  doc.y += 12;
+  curY = doc.y;
+  doc.font('Helvetica').fontSize(8).text('Masa Kerja Tambahan', leftX + 172, curY);
+  doc.text(':', leftX + 270, curY);
+  doc.text(data.masa_kerja_tambahan || '- Tahun', leftX + 278, curY);
+  doc.y = curY + 11;
+
+  curY = doc.y;
+  doc.font('Helvetica').fontSize(8).text('Masa Kerja Seluruhnya', leftX + 172, curY);
+  doc.text(':', leftX + 270, curY);
+  doc.text(data.masa_kerja_seluruhnya || mkgText, leftX + 278, curY);
+  doc.y = curY + 12;
 
   // Digaji menurut
-  const startY10 = doc.y;
-  doc.font('Helvetica-Bold').fontSize(8).text('10.', leftX, startY10);
-  doc.text('Digaji menurut', leftX + 16, startY10);
-  doc.text(':', leftX + 165, startY10);
-  doc.font('Helvetica').text(data.peraturan_gaji || 'PP No. 5 Tahun 2024', leftX + 172, startY10);
-  doc.y = startY10 + 11;
+  curY = doc.y;
+  doc.font('Helvetica-Bold').fontSize(8).text('10.', leftX, curY);
+  doc.text('Digaji menurut', leftX + 16, curY);
+  doc.text(':', leftX + 165, curY);
+  doc.font('Helvetica').text(data.peraturan_gaji || 'PP No. 5 Tahun 2024', leftX + 172, curY);
+  doc.y = curY + 11;
 
-  doc.font('Helvetica-Bold').fontSize(8).text('Dengan Gaji Pokok', leftX + 172, doc.y);
-  doc.text(':', leftX + 260, doc.y);
-  doc.font('Helvetica-Bold').text(`Rp. ${formatRupiah(data.gaji_pokok)}.-`, leftX + 268, doc.y);
-  doc.y += 12;
+  curY = doc.y;
+  doc.font('Helvetica-Bold').fontSize(8).text('Dengan Gaji Pokok', leftX + 172, curY);
+  doc.text(':', leftX + 260, curY);
+  doc.font('Helvetica-Bold').text(`Rp. ${formatRupiah(data.gaji_pokok)}.-`, leftX + 268, curY);
+  doc.y = curY + 12;
 
   // Rincian Tunjangan Keluarga
   const jmlPasangan = (data.pasangan && data.pasangan.length > 0) ? 1 : 0;
   const jmlAnak = (data.anak && data.anak.length) || 0;
   const tunjangan = hitungTunjanganKeluarga(data.gaji_pokok, jmlPasangan, jmlAnak);
 
-  doc.font('Helvetica').fontSize(8).text('Tunjangan Suami/Istri (10%)', leftX + 172, doc.y);
-  doc.text(':', leftX + 310, doc.y);
-  doc.text(`Rp. ${formatRupiah(tunjangan.tunjanganPasangan)}.-`, leftX + 318, doc.y);
-  doc.y += 11;
+  curY = doc.y;
+  doc.font('Helvetica').fontSize(8).text('Tunjangan Suami/Istri (10%)', leftX + 172, curY);
+  doc.text(':', leftX + 310, curY);
+  doc.text(`Rp. ${formatRupiah(tunjangan.tunjanganPasangan)}.-`, leftX + 318, curY);
+  doc.y = curY + 11;
 
-  doc.font('Helvetica').fontSize(8).text(`Tunjangan Anak (2% x ${Math.min(jmlAnak, 2)} anak)`, leftX + 172, doc.y);
-  doc.text(':', leftX + 310, doc.y);
-  doc.text(`Rp. ${formatRupiah(tunjangan.tunjanganAnak)}.-`, leftX + 318, doc.y);
-  doc.y += 11;
+  curY = doc.y;
+  doc.font('Helvetica').fontSize(8).text(`Tunjangan Anak (2% x ${Math.min(jmlAnak, 2)} anak)`, leftX + 172, curY);
+  doc.text(':', leftX + 310, curY);
+  doc.text(`Rp. ${formatRupiah(tunjangan.tunjanganAnak)}.-`, leftX + 318, curY);
+  doc.y = curY + 11;
 
-  doc.font('Helvetica-Bold').fontSize(8).text('Total Pembayaran', leftX + 172, doc.y);
-  doc.text(':', leftX + 310, doc.y);
-  doc.font('Helvetica-Bold').text(`Rp. ${formatRupiah(tunjangan.totalBruto)}.-`, leftX + 318, doc.y);
-  doc.y += 14;
+  curY = doc.y;
+  doc.font('Helvetica-Bold').fontSize(8).text('Total Pembayaran', leftX + 172, curY);
+  doc.text(':', leftX + 310, curY);
+  doc.font('Helvetica-Bold').text(`Rp. ${formatRupiah(tunjangan.totalBruto)}.-`, leftX + 318, curY);
+  doc.y = curY + 14;
 
   drawRow('11.', 'Alamat/Tempat tinggal', data.alamat || 'Jl. Tadulako Palu');
   doc.moveDown(0.3);
@@ -151,19 +160,21 @@ const generateKP4 = (data, res) => {
   doc.moveDown(0.2);
 
   const drawSubStatement = (letter, text, rightText = '') => {
-    const curY = doc.y;
-    doc.font('Helvetica-Bold').fontSize(8).text(letter, leftX + 16, curY);
-    doc.font('Helvetica').text(text, leftX + 30, curY);
+    let statY = doc.y;
+    doc.font('Helvetica-Bold').fontSize(8).text(letter, leftX + 16, statY);
+    doc.font('Helvetica').text(text, leftX + 30, statY);
     if (rightText) {
-      doc.text(rightText, leftX + 240, curY);
+      doc.text(rightText, leftX + 240, statY);
     }
-    doc.y += 11;
+    doc.y = statY + 11;
   };
 
   drawSubStatement('a.', 'Disamping jabatan utama tersebut, bekerja pula sebagai :', '-');
-  doc.font('Helvetica').fontSize(8).text('Dengan mendapat penghasilan sebesar', leftX + 42, doc.y);
-  doc.font('Helvetica-Bold').text('Rp.   -    sebulan', leftX + 240, doc.y);
-  doc.y += 11;
+
+  curY = doc.y;
+  doc.font('Helvetica').fontSize(8).text('Dengan mendapat penghasilan sebesar', leftX + 42, curY);
+  doc.font('Helvetica-Bold').text('Rp.   -    sebulan', leftX + 240, curY);
+  doc.y = curY + 11;
 
   drawSubStatement('b.', 'Mempunyai pensiun/pensiunan janda', 'Rp.   -    sebulan');
   drawSubStatement('c.', 'Kawin sah dengan :');
@@ -173,8 +184,7 @@ const generateKP4 = (data, res) => {
   const tableX = leftX + 5;
   const tableY = doc.y;
   const tableWidth = rightX - leftX - 10;
-  
-  // Kolom width: No(24), Nama(95), TglLahir(65), TglKawin(60), Kampus(65), Pekerjaan(65), Gaji(75), Ket(40) = 489
+
   const colW = [24, 95, 65, 60, 65, 65, 75, 40];
   const colX = [tableX];
   for (let i = 0; i < colW.length; i++) {
@@ -210,7 +220,7 @@ const generateKP4 = (data, res) => {
   doc.font('Helvetica').fontSize(7.5);
   if (p) {
     doc.text('1', colX[0], pDataY + 6, { width: colW[0], align: 'center' });
-    doc.font('Helvetica-Bold').text(p.nama || '-', colX[1] + 3, pDataY + 6, { width: colW[1] - 6 });
+    doc.font('Helvetica-Bold').text(p.nama || '-', colX[1] + 3, pDataY + 6, { width: colW[1] - 6, lineBreak: false });
     doc.font('Helvetica').text(formatDateShort(p.tanggal_lahir), colX[2], pDataY + 6, { width: colW[2], align: 'center' });
     doc.text(formatDateShort(p.tanggal_menikah), colX[3], pDataY + 6, { width: colW[3], align: 'center' });
     doc.text('-', colX[4], pDataY + 6, { width: colW[4], align: 'center' });
@@ -234,17 +244,20 @@ const generateKP4 = (data, res) => {
   const anakCount = (data.anak && data.anak.length) || 0;
   const anakTerbilang = angkaTerbilang(anakCount);
 
-  doc.font('Helvetica-Bold').fontSize(8).text('d.', leftX + 16, doc.y);
-  doc.font('Helvetica').text('Mempunyai anak-anak seperti dalam daftar disebelah ini yaitu :', leftX + 30, doc.y);
-  doc.y += 11;
+  curY = doc.y;
+  doc.font('Helvetica-Bold').fontSize(8).text('d.', leftX + 16, curY);
+  doc.font('Helvetica').text('Mempunyai anak-anak seperti dalam daftar disebelah ini yaitu :', leftX + 30, curY);
+  doc.y = curY + 11;
 
-  doc.font('Helvetica-Bold').fontSize(7.5).text('I. ANAK KANDUNG (ak), ANAK TIRI (at), dan ANAK ANGKAT (aa) yang masih menjadi tanggungan, belum', leftX + 30, doc.y);
-  doc.y += 9.5;
+  curY = doc.y;
+  doc.font('Helvetica-Bold').fontSize(7.5).text('I. ANAK KANDUNG (ak), ANAK TIRI (at), dan ANAK ANGKAT (aa) yang masih menjadi tanggungan, belum', leftX + 30, curY);
+  doc.y = curY + 9.5;
   doc.text('mempunyai pekerjaan sendiri atau masuk dalam Daftar Gaji.', leftX + 41, doc.y);
   doc.y += 10.5;
 
-  doc.text('II. ANAK KANDUNG (ak), ANAK TIRI (at), dan ANAK ANGKAT (aa) yang masih menjadi tanggungan, tetapi', leftX + 30, doc.y);
-  doc.y += 9.5;
+  curY = doc.y;
+  doc.text('II. ANAK KANDUNG (ak), ANAK TIRI (at), dan ANAK ANGKAT (aa) yang masih menjadi tanggungan, tetapi', leftX + 30, curY);
+  doc.y = curY + 9.5;
   doc.text('tidak masuk dalam DaftarGaji.', leftX + 44, doc.y);
   doc.y += 11;
 
@@ -266,14 +279,13 @@ const generateKP4 = (data, res) => {
   // Kolom Kanan (Tanggal & Pegawai)
   const rightColX = 350;
   doc.font('Helvetica-Bold').fontSize(8.5).text(`Palu, ${dateStr}`, rightColX, sigBoxY, { align: 'center', width: 170 });
-  doc.y = sigBoxY + 14;
-  doc.text('Pegawai yang bersangkutan,', rightColX, doc.y, { align: 'center', width: 170 });
+  doc.text('Pegawai yang bersangkutan,', rightColX, sigBoxY + 12, { align: 'center', width: 170 });
 
   // Kolom Kiri (Pimpinan)
-  doc.font('Helvetica-Bold').fontSize(8.5).text('Mengetahui :', leftX + 30, sigBoxY + 7);
-  doc.text('Kepala Sub. Bagian Kepegawaian dan Umum', leftX + 30, sigBoxY + 18);
+  doc.font('Helvetica-Bold').fontSize(8.5).text('Mengetahui :', leftX + 30, sigBoxY + 2);
+  doc.text('Kepala Sub. Bagian Kepegawaian dan Umum', leftX + 30, sigBoxY + 12);
 
-  const ttdY = sigBoxY + 68;
+  const ttdY = sigBoxY + 55; // Posisi absolut statis untuk menghindari loncat halaman di tengah elemen
 
   // Pejabat Kiri
   doc.font('Helvetica-Bold').fontSize(8.5).text('Drs. ILYAS, M.Ap', leftX + 30, ttdY, { underline: true });
