@@ -422,10 +422,12 @@ function DashboardPage() {
                         </td>
                         <td>{p.unit_kerja || '—'}</td>
                         <td>
-                          <button className="table-action" onClick={() => loadPegawaiDetail(p.nip)}>Buka</button>
-                          <button className="icon-action danger" aria-label="Hapus" onClick={() => handleDeletePegawai(p.nip)}>
-                            <Icon name="trash" size={15} />
-                          </button>
+                          <div className="action-group">
+                            <button className="table-action" onClick={() => loadPegawaiDetail(p.nip)}>Buka</button>
+                            <button className="icon-action danger" aria-label="Hapus" onClick={() => handleDeletePegawai(p.nip)}>
+                              <Icon name="trash" size={15} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))

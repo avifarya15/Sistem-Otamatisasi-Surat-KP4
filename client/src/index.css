@@ -166,6 +166,7 @@ button { cursor: pointer; }
 .table-action:hover, .text-action:hover { text-decoration: underline; }
 .icon-action { display: inline-grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: 8px; color: #668394; background: #edf4f3; }
 .icon-action.danger { color: #c16b58; background: #fff0ec; }
+.action-group { display: inline-flex; align-items: center; gap: 10px; }
 .loading-state, .empty-state { padding: 34px; color: #95a2a8; text-align: center; font-size: .78rem; }
 .empty-state p { margin: 8px 0 0; }
 .empty-icon { display: inline-grid; width: 39px; height: 39px; place-items: center; border-radius: 13px; color: #8ca2aa; background: #edf4f3; }
