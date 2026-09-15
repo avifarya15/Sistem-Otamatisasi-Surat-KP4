@@ -1,7 +1,11 @@
 const PDFDocument = require('pdfkit');
 const { hitungTunjanganKeluarga } = require('./salaryService');
 
-const generateKP4 = (data, res) => {
+const generateKP4 = (data, res, pejabat = {}) => {
+  // Default fallback untuk pejabat penandatangan
+  const pejabatNama = pejabat.nama || 'Drs. ILYAS, M.Ap';
+  const pejabatPangkat = pejabat.pangkat || 'Pembina';
+  const pejabatNip = pejabat.nip || '19691211 200212 1 005';
   const doc = new PDFDocument({
     size: 'A4',
     margins: { top: 35, bottom: 35, left: 45, right: 45 },
@@ -288,9 +292,9 @@ const generateKP4 = (data, res) => {
   const ttdY = sigBoxY + 55; // Posisi absolut statis untuk menghindari loncat halaman di tengah elemen
 
   // Pejabat Kiri
-  doc.font('Helvetica-Bold').fontSize(8.5).text('Drs. ILYAS, M.Ap', leftX + 30, ttdY, { underline: true });
-  doc.font('Helvetica').fontSize(8).text('Pembina', leftX + 30, ttdY + 12);
-  doc.font('Helvetica').fontSize(8).text('NIP. 19691211 200212 1 005', leftX + 30, ttdY + 23);
+  doc.font('Helvetica-Bold').fontSize(8.5).text(pejabatNama, leftX + 30, ttdY, { underline: true });
+  doc.font('Helvetica').fontSize(8).text(pejabatPangkat, leftX + 30, ttdY + 12);
+  doc.font('Helvetica').fontSize(8).text(`NIP. ${pejabatNip}`, leftX + 30, ttdY + 23);
 
   // Pegawai Kanan
   doc.font('Helvetica-Bold').fontSize(8.5).text(data.nama || '_______________________', rightColX, ttdY, { align: 'center', width: 170, underline: true });

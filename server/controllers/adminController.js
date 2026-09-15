@@ -299,8 +299,19 @@ const processKgb = async (req, res) => {
 
 const getSettings = async (req, res) => {
   try {
+    const rows = await Pengaturan.findAll({
+      where: {
+        kunci: ['persen_kenaikan_kgb', 'kepala_sub_nama', 'kepala_sub_pangkat', 'kepala_sub_nip']
+      }
+    });
+    const map = {};
+    for (const r of rows) map[r.kunci] = r.nilai;
+
     res.json({
-      persen_kenaikan_kgb: getPersenKgb()
+      persen_kenaikan_kgb: map.persen_kenaikan_kgb != null ? Number(map.persen_kenaikan_kgb) : getPersenKgb(),
+      kepala_sub_nama: map.kepala_sub_nama || '',
+      kepala_sub_pangkat: map.kepala_sub_pangkat || '',
+      kepala_sub_nip: map.kepala_sub_nip || ''
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -309,24 +320,67 @@ const getSettings = async (req, res) => {
 
 const updateSettings = async (req, res) => {
   try {
-    const { persen_kenaikan_kgb } = req.body;
-    if (persen_kenaikan_kgb == null) {
-      return res.status(400).json({ message: 'persen_kenaikan_kgb wajib diisi' });
+    const { persen_kenaikan_kgb, kepala_sub_nama, kepala_sub_pangkat, kepala_sub_nip } = req.body;
+
+    // Update persentase KGB jika diberikan
+    if (persen_kenaikan_kgb != null) {
+      const val = Number(persen_kenaikan_kgb);
+      if (isNaN(val) || val <= 0) {
+        return res.status(400).json({ message: 'Nilai persentase harus angka positif' });
+      }
+      setPersenKgb(val);
+      await Pengaturan.upsert({
+        kunci: 'persen_kenaikan_kgb',
+        nilai: String(val),
+        keterangan: 'Persentase kenaikan gaji berkala tiap 2 tahun (%)'
+      });
     }
-    const val = Number(persen_kenaikan_kgb);
-    if (isNaN(val) || val <= 0) {
-      return res.status(400).json({ message: 'Nilai persentase harus angka positif' });
+
+    // Update data pejabat penandatangan (Kepala Sub Bagian)
+    if (kepala_sub_nama != null) {
+      await Pengaturan.upsert({
+        kunci: 'kepala_sub_nama',
+        nilai: String(kepala_sub_nama),
+        keterangan: 'Nama Kepala Sub Bagian Kepegawaian dan Umum'
+      });
     }
-    setPersenKgb(val);
-    await Pengaturan.upsert({
-      kunci: 'persen_kenaikan_kgb',
-      nilai: String(val),
-      keterangan: 'Persentase kenaikan gaji berkala tiap 2 tahun (%)'
+    if (kepala_sub_pangkat != null) {
+      await Pengaturan.upsert({
+        kunci: 'kepala_sub_pangkat',
+        nilai: String(kepala_sub_pangkat),
+        keterangan: 'Pangkat Kepala Sub Bagian Kepegawaian dan Umum'
+      });
+    }
+    if (kepala_sub_nip != null) {
+      await Pengaturan.upsert({
+        kunci: 'kepala_sub_nip',
+        nilai: String(kepala_sub_nip),
+        keterangan: 'NIP Kepala Sub Bagian Kepegawaian dan Umum'
+      });
+    }
+
+    await logActivity(req, 'Update Pengaturan Sistem', {
+      persen_kenaikan_kgb,
+      kepala_sub_nama,
+      kepala_sub_pangkat,
+      kepala_sub_nip
     });
-    await logActivity(req, `Update Persentase KGB menjadi ${val}%`, { persen_kenaikan_kgb: val });
+
+    // Return updated settings
+    const rows = await Pengaturan.findAll({
+      where: {
+        kunci: ['persen_kenaikan_kgb', 'kepala_sub_nama', 'kepala_sub_pangkat', 'kepala_sub_nip']
+      }
+    });
+    const map = {};
+    for (const r of rows) map[r.kunci] = r.nilai;
+
     res.json({
-      message: 'Pengaturan persentase kenaikan berhasil disimpan',
-      persen_kenaikan_kgb: getPersenKgb()
+      message: 'Pengaturan berhasil disimpan',
+      persen_kenaikan_kgb: getPersenKgb(),
+      kepala_sub_nama: map.kepala_sub_nama || '',
+      kepala_sub_pangkat: map.kepala_sub_pangkat || '',
+      kepala_sub_nip: map.kepala_sub_nip || ''
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });

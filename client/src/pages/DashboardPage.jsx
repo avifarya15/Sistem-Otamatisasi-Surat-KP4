@@ -63,6 +63,11 @@ function DashboardPage() {
   const [savingSetting, setSavingSetting] = useState(false);
   const [settingMsg, setSettingMsg] = useState('');
 
+  // Pengaturan Pejabat Penandatangan (Kepala Sub Bagian)
+  const [kepalaSubNama, setKepalaSubNama] = useState('');
+  const [kepalaSubPangkat, setKepalaSubPangkat] = useState('');
+  const [kepalaSubNip, setKepalaSubNip] = useState('');
+
   const [formPasangan, setFormPasangan] = useState({});
   const [isAddingPasangan, setIsAddingPasangan] = useState(false);
   const [editingPasangan, setEditingPasangan] = useState(false);
@@ -103,6 +108,9 @@ function DashboardPage() {
       if (res.data.persen_kenaikan_kgb != null) {
         setPersenSetting(Number(res.data.persen_kenaikan_kgb));
       }
+      if (res.data.kepala_sub_nama != null) setKepalaSubNama(res.data.kepala_sub_nama);
+      if (res.data.kepala_sub_pangkat != null) setKepalaSubPangkat(res.data.kepala_sub_pangkat);
+      if (res.data.kepala_sub_nip != null) setKepalaSubNip(res.data.kepala_sub_nip);
     } catch (err) {
       console.error(err);
     }
@@ -113,8 +121,13 @@ function DashboardPage() {
     setSavingSetting(true);
     setSettingMsg('');
     try {
-      const res = await api.post('/admin/settings', { persen_kenaikan_kgb: persenSetting });
-      setSettingMsg(res.data.message || 'Pengaturan persentase berhasil disimpan!');
+      const res = await api.post('/admin/settings', {
+        persen_kenaikan_kgb: persenSetting,
+        kepala_sub_nama: kepalaSubNama,
+        kepala_sub_pangkat: kepalaSubPangkat,
+        kepala_sub_nip: kepalaSubNip
+      });
+      setSettingMsg(res.data.message || 'Pengaturan berhasil disimpan!');
       setRefresh(v => v + 1);
     } catch (err) {
       window.alert(err.response?.data?.message || 'Gagal menyimpan pengaturan');
@@ -570,6 +583,52 @@ function DashboardPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              <div className="settings-box" style={{ marginTop: '28px' }}>
+                <h3>Pejabat Penandatangan (Kepala Sub Bagian)</h3>
+                <p>Data pejabat yang tampil di bagian tanda tangan pada output PDF surat KP4. Ubah jika terjadi pergantian pejabat.</p>
+
+                <div className="settings-form-row" style={{ flexWrap: 'wrap', gap: '16px' }}>
+                  <Field label="Nama Lengkap Pejabat" hint="Contoh: Drs. ILYAS, M.Ap">
+                    <input
+                      className="field-input"
+                      type="text"
+                      value={kepalaSubNama}
+                      onChange={e => setKepalaSubNama(e.target.value)}
+                      placeholder="Drs. ILYAS, M.Ap"
+                    />
+                  </Field>
+                  <Field label="Pangkat" hint="Contoh: Pembina">
+                    <input
+                      className="field-input"
+                      type="text"
+                      value={kepalaSubPangkat}
+                      onChange={e => setKepalaSubPangkat(e.target.value)}
+                      placeholder="Pembina"
+                    />
+                  </Field>
+                  <Field label="NIP Pejabat" hint="Contoh: 19691211 200212 1 005">
+                    <input
+                      className="field-input"
+                      type="text"
+                      value={kepalaSubNip}
+                      onChange={e => setKepalaSubNip(e.target.value)}
+                      placeholder="19691211 200212 1 005"
+                    />
+                  </Field>
+                </div>
+
+                {(kepalaSubNama || kepalaSubPangkat || kepalaSubNip) && (
+                  <div className="pejabat-preview" style={{ marginTop: '16px', padding: '16px 20px', background: '#f6faf9', borderRadius: '10px', border: '1px solid #e0ebe8' }}>
+                    <small style={{ color: '#8ca2aa', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Preview Tanda Tangan PDF</small>
+                    <div style={{ marginTop: '8px' }}>
+                      <strong style={{ textDecoration: 'underline', color: 'var(--navy)' }}>{kepalaSubNama || '_______________'}</strong>
+                      <div style={{ fontSize: '0.82rem', color: '#5a6f78', marginTop: '2px' }}>{kepalaSubPangkat || '-'}</div>
+                      <div style={{ fontSize: '0.82rem', color: '#5a6f78' }}>NIP. {kepalaSubNip || '_______________'}</div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </section>

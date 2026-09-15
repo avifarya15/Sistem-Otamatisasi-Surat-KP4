@@ -43,6 +43,7 @@ Dilengkapi dengan portal publik untuk pegawai melakukan pengecekan data mandiri 
 - **Metrik & Ringkasan Data:** Indikator total pegawai terdaftar dan notifikasi pegawai yang memasuki periode KGB.
 - **Direktori & Pencarian Cepat:** Pencarian instan multifilter berdasarkan Nama, NIP, atau Unit Kerja.
 - **Manajemen Pegawai (CRUD):** Tambah pegawai baru, ubah rincian kepegawaian (NIP, nama, TTL, golongan, jabatan, unit kerja, gaji pokok, TMT CPNS, TMT KGB, MKG), dan hapus data.
+- **Aksi Tabel Terstruktur & Ergonomis:** Penataan tombol aksi pada baris tabel pegawai (tombol "Buka" dan ikon "Hapus") dengan grup aksi terstruktur (`action-group`) yang rapi, berjarak optimal, dan nyaman digunakan untuk meminimalkan risiko salah tekan.
 - **Kalkulasi Otomatis Saat Input:** Bila gaji pokok dikosongkan saat input pegawai, sistem mengkalkulasi nominal awal otomatis sesuai golongan dan masa kerja.
 - **Manajemen Data Pasangan:** Tambah, edit, dan hapus pasangan pegawai (nama, TTL, pekerjaan/NIP, tanggal pernikahan).
 - **Manajemen Tanggungan Anak:** Tambah, edit, dan hapus data anak (nama, TTL, status anak: *Kandung / Tiri / Angkat*, dan status pendidikan).
@@ -58,9 +59,10 @@ Dilengkapi dengan portal publik untuk pegawai melakukan pengecekan data mandiri 
 
 ### 4. ⚙️ Pengaturan Parameter Dinamis
 - **Konfigurasi Persentase Kenaikan KGB:** Administrator dapat menyesuaikan nilai persentase kenaikan gaji berkala (standar: 3,15%) yang tersimpan persisten pada tabel pengaturan sistem tanpa mengubah kode program.
+- **Konfigurasi Pejabat Penandatangan KP4 (Kepala Sub Bagian):** Administrator dapat mengubah data pejabat penandatangan naskah dinas KP4 (Nama Lengkap, Pangkat/Golongan, dan NIP Kepala Sub Bagian Kepegawaian dan Umum) secara dinamis dari dashboard admin, dilengkapi dengan *live visual preview* blok tanda tangan. Fitur ini mengantisipasi pergantian pejabat tanpa perlu perubahan kode sumber program.
 
 ### 5. 📜 Audit Trail & Log Aktivitas
-- **Perekaman Otomatis:** Setiap mutasi data (tambah, ubah, hapus pegawai/pasangan/anak, proses KGB, dan perubahan konfigurasi) otomatis terekam ke basis data.
+- **Perekaman Otomatis:** Setiap mutasi data (tambah, ubah, hapus pegawai/pasangan/anak, proses KGB, dan perubahan konfigurasi sistem/pejabat) otomatis terekam ke basis data.
 - **Informasi Jejak Lengkap:** Mencatat stempel waktu (*timestamp*), username admin pelaksana, tipe aktivitas, snapshot detail payload perubahan, dan alamat IP.
 - **Antarmuka Riwayat:** Menampilkan 100 log transaksi terbaru pada halaman audit terlindungi.
 
@@ -70,7 +72,7 @@ Dilengkapi dengan portal publik untuk pegawai melakukan pengecekan data mandiri 
   - **Bagian I:** Data Pokok Pegawai (NIP, Golongan, Jabatan, Unit Kerja, MKG, Gaji Pokok).
   - **Bagian II:** Data Pasangan (Suami/Istri, TTL, Pekerjaan, Tanggal Menikah).
   - **Bagian III:** Tabel Susunan Anak & Keterangan Status Pendidikan.
-  - **Bagian Penutup:** Kolom legalitas tanda tangan Kepala Satuan Kerja dan Pegawai bersangkutan.
+  - **Bagian Penutup:** Kolom legalitas tanda tangan dinamis Pejabat yang Berwenang (Kepala Sub Bagian Kepegawaian dan Umum, sesuai pengaturan sistem aktif) berdampingan dengan kolom tanda tangan Pegawai yang bersangkutan.
 
 ---
 
@@ -276,8 +278,8 @@ Buka portal publik di `http://localhost:5173/` dan masukkan salah satu data peng
 #### Konfigurasi Sistem & Jejak Audit
 | Method | Endpoint | Deskripsi |
 | :--- | :--- | :--- |
-| `GET` | `/api/admin/settings` | Membaca konfigurasi aktif persentase kenaikan KGB |
-| `POST` | `/api/admin/settings` | Memperbarui persentase kenaikan KGB (disimpan di DB) |
+| `GET` | `/api/admin/settings` | Membaca konfigurasi aktif sistem (persentase KGB & identitas pejabat penandatangan: nama, pangkat, NIP) |
+| `POST` | `/api/admin/settings` | Memperbarui parameter sistem (persentase KGB dan/atau pejabat penandatangan: `kepala_sub_nama`, `kepala_sub_pangkat`, `kepala_sub_nip`) |
 | `GET` | `/api/admin/logs` | Mengambil 100 riwayat transaksi audit trail terbaru |
 
 ---

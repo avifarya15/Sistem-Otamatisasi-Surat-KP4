@@ -5,11 +5,12 @@
 
 ### Informasi Dokumen
 - **Nama Proyek:** Sistem Otomatisasi & Verifikasi Surat KP4 PNS
-- **Versi Dokumen:** 1.0.0
-- **Status:** Final / Disetujui
-- **Tanggal Rilis:** 2026-09-07
+- **Versi Dokumen:** 1.1.0
+- **Status:** Final / Disetujui (Revisi Terkini)
+- **Tanggal Rilis:** 2026-09-15
 - **Target Pembaca:** Pengembang Perangkat Lunak, Administrator Kepegawaian, Tim QA/Penguji, Pengambil Kebijakan Unit Kepegawaian (BKD/BKPSDM).
 - **Standar Format:** Mengacu pada IEEE Std 830-1998 / ISO/IEC/IEEE 29148:2018 (*Systems and software engineering — Life cycle processes — Requirements engineering*).
+- **Catatan Pembaruan (v1.1.0):** Penambahan konfigurasi dinamis pejabat penandatangan surat KP4 (Nama, Pangkat, NIP Kepala Sub Bagian Kepegawaian dan Umum) beserta *live visual preview*, restrukturisasi ergonomis tombol aksi tabel pegawai (*action-group*), dan pembaruan favicon aplikasi.
 
 ---
 
@@ -127,10 +128,10 @@ Sistem Otomatisasi Surat KP4 merupakan sistem mandiri (*standalone client-server
    - Perhitungan tunjangan anak sebesar 2% dari gaji pokok per anak (maksimal 2 anak tanggungan).
    - Penjumlahan otomatis total penghasilan bruto.
 3. **Penyimpanan Interaktif Masa Kerja:** Pegawai dapat memperbarui masa kerja secara mandiri dengan pencatatan instan ke basis data.
-4. **Pencetakan Berkas PDF Resmi:** Pengunduhan dokumen KP4 A4 siap cetak dengan penamaan file terstruktur (`KP4_<NIP>.pdf`).
-5. **Manajemen Master Data Kepegawaian (Admin):** Modul CRUD lengkap untuk pegawai, pasangan, dan anak dengan proteksi *cascading delete*.
+4. **Pencetakan Berkas PDF Resmi:** Pengunduhan dokumen KP4 A4 siap cetak dengan penamaan file terstruktur (`KP4_<NIP>.pdf`) serta integrasi dinamis data pejabat penandatangan (Kepala Sub Bagian Kepegawaian dan Umum).
+5. **Manajemen Master Data Kepegawaian (Admin):** Modul CRUD lengkap untuk pegawai, pasangan, dan anak dengan proteksi *cascading delete* serta penataan tombol aksi baris tabel pegawai yang terstruktur (*action-group*) dan ergonomis.
 6. **Sistem Evaluasi Kenaikan Gaji Berkala (KGB):** Pemindaian otomatis kelayakan KGB pegawai, penyesuaian masa kerja +2 tahun, peningkatan gaji pokok dengan rasio persentase yang dapat diatur, dan pembaruan TMT.
-7. **Pengaturan Parameter Dinamis:** Antarmuka konfigurasi rasio kenaikan KGB tanpa perlunya modifikasi kode sumber.
+7. **Pengaturan Parameter Dinamis:** Antarmuka konfigurasi rasio kenaikan KGB serta pembaruan identitas Pejabat Penandatangan KP4 (Nama, Pangkat, NIP Kepala Sub Bagian) yang tersimpan persisten di basis data dan dilengkapi dengan *live preview* visual.
 8. **Audit Trail Komprehensif:** Pencatatan setiap aksi modifikasi data oleh admin ke dalam tabel log beserta stempel waktu dan IP asal.
 
 ### 2.3 Karakteristik Pengguna (User Personas)
@@ -241,7 +242,7 @@ Antarmuka sistem mengadopsi bahasa desain **Archipelago Civic** dengan karakteri
   2. **Bagian I (Data Pegawai):** Nama lengkap, NIP, Tempat/Tanggal Lahir, Jenis Kelamin, Pangkat/Golongan Ruang, Jabatan, Satuan Kerja, Masa Kerja Golongan (Tahun & Bulan), dan Gaji Pokok Terhitung.
   3. **Bagian II (Data Pasangan):** Nama Suami/Istri, Tempat/Tanggal Lahir, Pekerjaan/NIP, Tanggal Pernikahan, dan Status Perkawinan.
   4. **Bagian III (Tabel Susunan Anak):** Tabel kolom bergaris rapi berisi Nomor, Nama Anak, Tempat/Tanggal Lahir, Status Hubungan (Kandung/Tiri/Angkat), dan Status Pendidikan.
-  5. **Bagian Penutup & Legalitas:** Tanggal penerbitan surat, kolom tanda tangan Pejabat yang Berwenang (Kepala Sub Bagian / Satuan Kerja), dan kolom tanda tangan Pegawai yang bersangkutan.
+  5. **Bagian Penutup & Legalitas:** Tanggal penerbitan surat, kolom tanda tangan Pejabat yang Berwenang (Kepala Sub Bagian Kepegawaian dan Umum dengan Nama Lengkap, Pangkat/Golongan, dan NIP dinamis dari pengaturan sistem aktif), dan kolom tanda tangan Pegawai yang bersangkutan.
 - **Format Keluaran:** Berkas stream biner A4 dengan margin 35pt (top/bottom) dan 45pt (left/right).
 
 ---
@@ -264,11 +265,12 @@ Antarmuka sistem mengadopsi bahasa desain **Archipelago Civic** dengan karakteri
 
 ### 4.5 Modul Manajemen Data Kepegawaian & Keluarga (Admin Dashboard)
 
-#### [FR-08] Pengelolaan Data Pegawai (CRUD)
+#### [FR-08] Pengelolaan Data Pegawai (CRUD) & Antarmuka Terstruktur
 - **Deskripsi:** Administrator dapat melihat daftar seluruh pegawai, mencari, menambah, mengubah, dan menghapus data pegawai.
 - **Fitur Spesifik:**
   - Menampilkan daftar dengan informasi NIP, Nama, Golongan, Unit Kerja, Gaji Pokok, dan Masa Kerja.
   - Pencarian fleksibel berdasarkan kombinasi nama, NIP, dan instansi unit kerja.
+  - **Tata Letak Aksi Terstruktur (Ergonomi Antarmuka):** Baris data tabel pegawai mengelompokkan tombol aksi "Buka" (tinjau detail) dan tombol ikon "Hapus" ke dalam wadah terstruktur (`action-group`) dengan spasi terukur (`gap: 10px`) untuk mencegah salah klik antara aksi navigasi dan aksi destruktif.
   - Saat penambahan/pengubahan pegawai, jika gaji pokok tidak diisi, sistem menghitung otomatis dari golongan dan masa kerja.
   - Saat pegawai dihapus, sistem melakukan *cascading delete* terhadap seluruh data pasangan dan anak terkait.
 
@@ -309,12 +311,20 @@ Antarmuka sistem mengadopsi bahasa desain **Archipelago Civic** dengan karakteri
 - **Penyimpanan:** Nilai disimpan persisten di tabel `pengaturan` dengan kunci `persen_kenaikan_kgb`.
 - **Efek:** Seluruh perhitungan estimasi gaji dan eksekusi KGB selanjutnya akan langsung merujuk pada persentase terbaru ini.
 
+#### [FR-13B] Pengaturan Dinamis Pejabat Penandatangan Dokumen KP4
+- **Deskripsi:** Sistem harus menyediakan fungsi bagi administrator untuk memperbarui data pejabat penandatangan formulir KP4 (Kepala Sub Bagian Kepegawaian dan Umum) agar keluaran dokumen PDF tetap akurat sewaktu terjadi mutasi atau pergantian pejabat tanpa memodifikasi kode program.
+- **Input:** `kepala_sub_nama` (string), `kepala_sub_pangkat` (string), `kepala_sub_nip` (string).
+- **Pratinjau Visual (Live Preview):** Antarmuka dashboard menampilkan blok *live preview* tanda tangan secara langsung mengikuti perubahan nilai input sebelum atau sesudah disimpan.
+- **Penyimpanan:** Disimpan secara persisten pada tabel `pengaturan` menggunakan operasi *upsert* untuk kunci `kepala_sub_nama`, `kepala_sub_pangkat`, dan `kepala_sub_nip`.
+- **Nilai Bawaan (Fallback):** Bila pengaturan belum disetel, sistem secara otomatis menggunakan nilai fallback bawaan: Nama: `Drs. ILYAS, M.Ap`, Pangkat: `Pembina`, NIP: `19691211 200212 1 005`.
+- **Efek:** Generator berkas PDF membaca data pejabat penandatangan ini pada setiap permintaan pengunduhan dokumen KP4.
+
 ---
 
 ### 4.8 Modul Audit Trail & Pencatatan Log Aktivitas
 
 #### [FR-14] Perekaman Otomatis Aktivitas Modifikasi Data
-- **Deskripsi:** Setiap kali terjadi aksi `CREATE`, `UPDATE`, `DELETE`, `PROCESS KGB`, dan `UPDATE SETTINGS` pada portal admin, sistem wajib mencatat aktivitas tersebut ke dalam basis data.
+- **Deskripsi:** Setiap kali terjadi aksi `CREATE`, `UPDATE`, `DELETE`, `PROCESS KGB`, serta pembaruan parameter konfigurasi sistem dan pejabat penandatangan pada portal admin, sistem wajib mencatat aktivitas tersebut ke dalam basis data.
 - **Struktur Log:**
   - ID aktivitas (*Auto-increment*)
   - ID dan Username admin pelaksana
@@ -475,7 +485,7 @@ Menyimpan seluruh jejak audit administratif yang terjadi di portal internal.
 Menyimpan parameter konfigurasi global sistem secara *key-value*.
 | Nama Kolom | Tipe Data | Keterangan / Batasan |
 | :--- | :--- | :--- |
-| `kunci` | VARCHAR(50) | **Primary Key**, nama konfigurasi (misal: `persen_kenaikan_kgb`). |
+| `kunci` | VARCHAR(50) | **Primary Key**, nama konfigurasi. Kunci aktif meliputi: `persen_kenaikan_kgb` (persentase kenaikan KGB), `kepala_sub_nama` (nama pejabat penandatangan KP4), `kepala_sub_pangkat` (pangkat pejabat penandatangan), dan `kepala_sub_nip` (NIP pejabat penandatangan). |
 | `nilai` | VARCHAR(255) | Nilai konfigurasi dalam format teks. |
 | `keterangan` | VARCHAR(255) | Deskripsi parameter. |
 | `createdAt` | DATETIME | Waktu pembuatan konfigurasi. |
@@ -520,15 +530,16 @@ Matriks berikut menghubungkan kebutuhan pengguna, kebutuhan fungsional (FR), imp
 | **FR-02** | Penyesuaian Interaktif MKG | `PegawaiPage.jsx`, `pegawaiController.js` | `POST /api/print/update-mkg` |
 | **FR-03** | Komputasi Gaji Otomatis (PP 5/2024) | `salaryService.js` | Digunakan internal controller |
 | **FR-04** | Komputasi Tunjangan Keluarga | `salaryService.js` | Digunakan internal controller & PDF |
-| **FR-05** | Generator PDF Resmi KP4 | `pdfGenerator.js`, `printController.js` | `POST` / `GET /api/print/generate` |
+| **FR-05** | Generator PDF Resmi KP4 & Tanda Tangan Dinamis | `pdfGenerator.js`, `printController.js` | `POST` / `GET /api/print/generate` |
 | **FR-06** | Autentikasi Admin JWT | `AdminLoginPage.jsx`, `authController.js` | `POST /api/auth/login` |
 | **FR-07** | Otorisasi & Guard Middleware | `middleware/auth.js` | Dipasang di seluruh `/api/admin/*` |
-| **FR-08** | CRUD Pegawai & Hitung Gaji Baru | `DashboardPage.jsx`, `adminController.js` | `GET`, `POST`, `PUT`, `DELETE /api/admin/pegawai` |
+| **FR-08** | CRUD Pegawai, Hitung Gaji Baru, & Aksi Terstruktur | `DashboardPage.jsx`, `adminController.js` | `GET`, `POST`, `PUT`, `DELETE /api/admin/pegawai` |
 | **FR-09** | CRUD Data Pasangan | `DashboardPage.jsx`, `adminController.js` | `POST`, `PUT`, `DELETE /api/admin/pasangan` |
 | **FR-10** | CRUD Data Tanggungan Anak | `DashboardPage.jsx`, `adminController.js` | `POST`, `PUT`, `DELETE /api/admin/anak` |
 | **FR-11** | Deteksi Otomatis Kelayakan KGB | `DashboardPage.jsx`, `adminController.js` | `GET /api/admin/kgb/eligible` |
 | **FR-12** | Pemrosesan KGB Terotomatisasi | `DashboardPage.jsx`, `adminController.js` | `POST /api/admin/kgb/process/:nip` |
 | **FR-13** | Konfigurasi Persentase KGB | `DashboardPage.jsx`, `adminController.js` | `GET`, `POST /api/admin/settings` |
+| **FR-13B**| Konfigurasi Pejabat Penandatangan KP4 & Live Preview | `DashboardPage.jsx`, `adminController.js` | `GET`, `POST /api/admin/settings` |
 | **FR-14** | Perekaman Jejak Audit Otomatis | `adminController.js`, `LogAktivitas.js` | Dieksekusi otomatis pada setiap mutasi data |
 | **FR-15** | Antarmuka Audit Trail | `LogAktivitasPage.jsx`, `adminController.js`| `GET /api/admin/logs` |
 
