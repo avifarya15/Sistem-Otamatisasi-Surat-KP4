@@ -151,7 +151,7 @@ function PegawaiPage() {
           </div>
         </div>
         <div className="verify-card soft-card fade-up">
-          <div className="card-kicker"><span className="step-badge">01</span><span>Verifikasi identitas</span></div>
+          <div className="card-kicker"><span className="step-badge">01</span><span>Verifikasi identitas Pegawai</span></div>
           <h2>Temukan data Anda</h2>
           <p className="card-intro">Masukkan NIP dan tanggal lahir sesuai data kepegawaian.</p>
           <form onSubmit={handleVerify}>
