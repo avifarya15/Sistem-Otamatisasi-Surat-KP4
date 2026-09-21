@@ -57,6 +57,8 @@ function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
   const [query, setQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Pengaturan persentase KGB oleh admin/sistem
   const [persenSetting, setPersenSetting] = useState(3.15);
@@ -80,6 +82,16 @@ function DashboardPage() {
     fetchKgbEligible();
     fetchSettings();
   }, [refresh]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isAdding) {
+        setIsAdding(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAdding]);
 
   const fetchPegawaiList = async () => {
     setLoading(true);
@@ -315,6 +327,36 @@ function DashboardPage() {
 
   const filtered = useMemo(() => pegawaiList.filter(p => `${p.nama} ${p.nip} ${p.unit_kerja} ${p.golongan}`.toLowerCase().includes(query.toLowerCase())), [pegawaiList, query]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, pageSize]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
+  const paginatedPegawai = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
+
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (currentPage <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    if (currentPage >= totalPages - 3) {
+      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+  };
+
   return (
     <main className="admin-main page-wrap">
       <div className="admin-heading">
@@ -323,9 +365,6 @@ function DashboardPage() {
           <h1 className="display-font">Manajemen Pegawai & KGB</h1>
           <p>Kelola data pegawai, masa kerja golongan (MKG), dan kenaikan gaji berkala ({persenSetting}% per 2 tahun).</p>
         </div>
-        <button className="btn-primary" onClick={() => { setIsAdding(true); setSelectedPegawai(null); setSelectedNip(null); setFormPegawai({ mkg_tahun: 0, mkg_bulan: 0, status_kgb: 'Normal' }); }}>
-          <Icon name="plus" size={17} /> Pegawai baru
-        </button>
       </div>
 
       <div className="metric-row">
@@ -389,9 +428,14 @@ function DashboardPage() {
                 <h2>Direktori pegawai</h2>
                 <p>Pilih nama untuk melihat profil, masa kerja, dan detail keluarga.</p>
               </div>
-              <div className="search-box">
-                <Icon name="search" size={16} />
-                <input placeholder="Cari nama, NIP, atau golongan…" value={query} onChange={e => setQuery(e.target.value)} />
+              <div className="directory-toolbar">
+                <div className="search-box">
+                  <Icon name="search" size={16} />
+                  <input placeholder="Cari nama, NIP, atau golongan…" value={query} onChange={e => setQuery(e.target.value)} />
+                </div>
+                <button className="btn-primary" onClick={() => { setActiveTab('direktori'); setIsAdding(true); setSelectedPegawai(null); setSelectedNip(null); setFormPegawai({ mkg_tahun: 0, mkg_bulan: 0, status_kgb: 'Normal' }); }}>
+                  <Icon name="plus" size={17} /> Pegawai baru
+                </button>
               </div>
             </div>
             <div className="table-wrap">
@@ -413,7 +457,7 @@ function DashboardPage() {
                   ) : filtered.length === 0 ? (
                     <tr><td colSpan="7"><EmptyState text="Belum ada data yang cocok." /></td></tr>
                   ) : (
-                    filtered.map(p => (
+                    paginatedPegawai.map(p => (
                       <tr key={p.nip} className={selectedNip === p.nip ? 'active' : ''}>
                         <td>
                           <strong className="person-name">{p.nama}</strong>
@@ -448,6 +492,71 @@ function DashboardPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* KONTROL PAGINASI */}
+            {filtered.length > 0 && (
+              <div className="table-pagination">
+                <div className="pagination-info">
+                  Menampilkan <strong>{(currentPage - 1) * pageSize + 1}</strong> - <strong>{Math.min(currentPage * pageSize, filtered.length)}</strong> dari <strong>{filtered.length}</strong> pegawai
+                </div>
+
+                <div className="pagination-actions">
+                  <div className="page-size-picker">
+                    <span>Baris per halaman:</span>
+                    <select
+                      value={pageSize}
+                      onChange={e => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
+
+                  <div className="pagination-nav">
+                    <button
+                      type="button"
+                      className="page-nav-btn"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      title="Halaman sebelumnya"
+                    >
+                      <Icon name="chevronLeft" size={14} /> Sebelumnya
+                    </button>
+
+                    <div className="page-numbers">
+                      {getPageNumbers().map((item, idx) => (
+                        item === '...' ? (
+                          <span key={`dots-${idx}`} className="page-num-btn ellipsis">…</span>
+                        ) : (
+                          <button
+                            key={item}
+                            type="button"
+                            className={`page-num-btn ${item === currentPage ? 'active' : ''}`}
+                            onClick={() => setCurrentPage(item)}
+                          >
+                            {item}
+                          </button>
+                        )
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="page-nav-btn"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      title="Halaman berikutnya"
+                    >
+                      Berikutnya <Icon name="chevronRight" size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         )}
 
@@ -526,37 +635,27 @@ function DashboardPage() {
               </div>
             </div>
 
+            <form onSubmit={handleSaveSetting}>
             <div className="settings-wrap">
               <div className="settings-box">
                 <h3>Persentase Kenaikan per 2 Tahun</h3>
                 <p>Nilai ini digunakan oleh sistem untuk menghitung gaji pokok otomatis saat user memasukkan masa kerja di portal dan saat proses KGB dilakukan.</p>
 
-                <form onSubmit={handleSaveSetting}>
-                  <div className="settings-form-row">
-                    <Field label="Besaran Kenaikan (%)" hint="Default: 3.15%">
-                      <input
-                        className="field-input"
-                        type="number"
-                        step="0.01"
-                        min="0.1"
-                        max="25"
-                        value={persenSetting}
-                        onChange={e => setPersenSetting(Number(e.target.value))}
-                        required
-                        style={{ maxWidth: '160px' }}
-                      />
-                    </Field>
-                    <button className="btn-teal" type="submit" disabled={savingSetting}>
-                      {savingSetting ? 'Menyimpan…' : 'Simpan Pengaturan'}
-                    </button>
-                  </div>
-                </form>
-
-                {settingMsg && (
-                  <div className="success-toast">
-                    <Icon name="check" size={16} /> {settingMsg}
-                  </div>
-                )}
+                <div className="settings-form-row">
+                  <Field label="Besaran Kenaikan (%)" hint="Default: 3.15%">
+                    <input
+                      className="field-input"
+                      type="number"
+                      step="0.01"
+                      min="0.1"
+                      max="25"
+                      value={persenSetting}
+                      onChange={e => setPersenSetting(Number(e.target.value))}
+                      required
+                      style={{ maxWidth: '160px' }}
+                    />
+                  </Field>
+                </div>
 
                 <div style={{ marginTop: '24px' }}>
                   <h4 style={{ margin: '0 0 8px', fontSize: '0.88rem', color: 'var(--navy)' }}>Simulasi Gaji Acuan 2024 dengan Kenaikan {persenSetting}% per 2 Tahun:</h4>
@@ -630,28 +729,176 @@ function DashboardPage() {
                   </div>
                 )}
               </div>
+
+              <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <button className="btn-teal" type="submit" disabled={savingSetting}>
+                  {savingSetting ? 'Menyimpan…' : 'Simpan Pengaturan'}
+                </button>
+                {settingMsg && (
+                  <div className="success-toast" style={{ margin: 0 }}>
+                    <Icon name="check" size={16} /> {settingMsg}
+                  </div>
+                )}
+              </div>
             </div>
+            </form>
           </section>
         )}
       </div>
 
       {/* DETAIL PEGAWAI / TAMBAH PEGAWAI */}
-      {(selectedPegawai || isAdding) && (
+      {/* MODAL WINDOW / DIALOG BOX: TAMBAH PEGAWAI BARU */}
+      {isAdding && (
+        <div className="modal-overlay" onClick={() => setIsAdding(false)}>
+          <div className="modal-dialog" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title-group">
+                <div className="modal-title-badge">
+                  <Icon name="plus" size={20} strokeWidth={2.4} />
+                </div>
+                <div>
+                  <div className="eyebrow" style={{ color: '#0284C7', marginBottom: '2px' }}>Formulir Pegawai Baru</div>
+                  <h2>Tambah Pegawai Baru</h2>
+                  <p>Lengkapi informasi identitas pegawai, masa kerja golongan (MKG), dan gaji pokok.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setIsAdding(false)}
+                title="Tutup Jendela (Esc)"
+              >
+                <Icon name="close" size={16} strokeWidth={2.2} />
+                <span>Tutup</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePegawai} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+              <div className="modal-body">
+                <div className="form-section-title">
+                  <Icon name="users" size={15} /> Informasi Pribadi & Jabatan
+                </div>
+                <div className="form-grid">
+                  <Field label="NIP" hint="18 digit angka unik">
+                    <input className="field-input" value={formPegawai.nip || ''} onChange={e => updatePegawai('nip', e.target.value)} maxLength={18} placeholder="Contoh: 198503122008011002" required autoFocus />
+                  </Field>
+                  <Field label="Nama lengkap" hint="Beserta gelar jika ada">
+                    <input className="field-input" value={formPegawai.nama || ''} onChange={e => updatePegawai('nama', e.target.value)} placeholder="Contoh: Budi Santoso, S.Pd." required />
+                  </Field>
+                  <Field label="Tempat lahir">
+                    <input className="field-input" value={formPegawai.tempat_lahir || ''} onChange={e => updatePegawai('tempat_lahir', e.target.value)} placeholder="Contoh: Palu" />
+                  </Field>
+                  <Field label="Tanggal lahir">
+                    <input className="field-input" type="date" value={dateOnly(formPegawai.tanggal_lahir)} onChange={e => updatePegawai('tanggal_lahir', e.target.value)} required />
+                  </Field>
+
+                  <Field label="Golongan" hint="Contoh: III/a, III/c, IV/a, IX">
+                    <input className="field-input" value={formPegawai.golongan || ''} onChange={handleGolonganChange} placeholder="III/c" />
+                  </Field>
+                  <Field label="Jabatan">
+                    <input className="field-input" value={formPegawai.jabatan || ''} onChange={e => updatePegawai('jabatan', e.target.value)} placeholder="Contoh: Analis Kebijakan" />
+                  </Field>
+                  <Field label="Unit kerja" style={{ gridColumn: 'span 2' }}>
+                    <input className="field-input" value={formPegawai.unit_kerja || ''} onChange={e => updatePegawai('unit_kerja', e.target.value)} placeholder="Contoh: Dinas Pendidikan" />
+                  </Field>
+                </div>
+
+                <div className="form-section-title">
+                  <Icon name="file" size={15} /> Masa Kerja & Riwayat KGB
+                </div>
+                <div className="form-grid">
+                  <Field label="Masa Kerja Golongan (Tahun)" hint="0–40 tahun">
+                    <input
+                      className="field-input"
+                      type="number"
+                      min="0"
+                      max="40"
+                      value={formPegawai.mkg_tahun ?? ''}
+                      onChange={handleMkgTahunChange}
+                      required
+                    />
+                  </Field>
+                  <Field label="Masa Kerja Golongan (Bulan)" hint="0–11 bulan">
+                    <input
+                      className="field-input"
+                      type="number"
+                      min="0"
+                      max="11"
+                      value={formPegawai.mkg_bulan ?? ''}
+                      onChange={e => updatePegawai('mkg_bulan', e.target.value === '' ? '' : Number(e.target.value))}
+                    />
+                  </Field>
+                  <Field label="TMT CPNS / Pengangkatan">
+                    <input className="field-input" type="date" value={dateOnly(formPegawai.tmt_cpns)} onChange={e => updatePegawai('tmt_cpns', e.target.value)} />
+                  </Field>
+                  <Field label="TMT KGB Terakhir">
+                    <input className="field-input" type="date" value={dateOnly(formPegawai.tmt_kgb_terakhir)} onChange={e => updatePegawai('tmt_kgb_terakhir', e.target.value)} />
+                  </Field>
+                </div>
+
+                <div className="form-section-title">
+                  <Icon name="shield" size={15} /> Status & Penetapan Gaji Pokok
+                </div>
+                <div className="form-grid">
+                  <Field label="Status KGB" style={{ gridColumn: 'span 2' }}>
+                    <select className="field-input" value={formPegawai.status_kgb || 'Normal'} onChange={e => updatePegawai('status_kgb', e.target.value)}>
+                      <option value="Normal">Normal</option>
+                      <option value="Waktunya KGB">Waktunya KGB (Perlu Kenaikan {persenSetting}%)</option>
+                    </select>
+                  </Field>
+
+                  <Field label="Gaji Pokok (Rp)" hint="Bisa manual atau klik hitung otomatis" style={{ gridColumn: 'span 2' }}>
+                    <div className="salary-input-wrap">
+                      <input
+                        className="field-input"
+                        type="number"
+                        value={formPegawai.gaji_pokok || ''}
+                        onChange={e => {
+                          updatePegawai('gaji_pokok', e.target.value);
+                          updatePegawai('_manualGaji', true);
+                        }}
+                        placeholder="Contoh: 3200000"
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="btn-helper-calc"
+                        onClick={handleHitungOtomatisGaji}
+                        title={`Hitung otomatis berdasarkan acuan 2024 dengan kenaikan ${persenSetting}% per 2 tahun masa kerja`}
+                      >
+                        Hitung {persenSetting}%
+                      </button>
+                    </div>
+                  </Field>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button className="btn-ghost" type="button" onClick={() => setIsAdding(false)}>Batal</button>
+                <button className="btn-primary" type="submit"><Icon name="check" size={16} /> Simpan Pegawai</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DETAIL PROFIL PEGAWAI (KETIKA KLIK BUKA PADA TABEL) */}
+      {selectedPegawai && (
         <section className="soft-card detail-card fade-up">
           <div className="detail-header">
             <div>
-              <div className="eyebrow">{isAdding ? 'Data baru' : 'Profil pegawai'}</div>
-              <h2>{isAdding ? 'Tambah pegawai' : selectedPegawai.nama}</h2>
-              <p>{isAdding ? 'Lengkapi informasi pegawai, masa kerja golongan, dan gaji.' : `NIP ${selectedPegawai.nip} · ${selectedPegawai.unit_kerja || 'Unit kerja belum diisi'}`}</p>
+              <div className="eyebrow">Profil pegawai</div>
+              <h2>{selectedPegawai.nama}</h2>
+              <p>NIP {selectedPegawai.nip} · {selectedPegawai.unit_kerja || 'Unit kerja belum diisi'}</p>
             </div>
-            <button className="close-detail" onClick={() => { setIsAdding(false); setSelectedPegawai(null); setSelectedNip(null); }}>
+            <button className="close-detail" onClick={() => { setSelectedPegawai(null); setSelectedNip(null); }}>
               <Icon name="close" size={18} />
             </button>
           </div>
 
           <form onSubmit={handleSavePegawai} className="form-grid">
             <Field label="NIP">
-              <input className="field-input" value={formPegawai.nip || ''} onChange={e => updatePegawai('nip', e.target.value)} readOnly={!isAdding} maxLength={18} required />
+              <input className="field-input" value={formPegawai.nip || ''} onChange={e => updatePegawai('nip', e.target.value)} readOnly maxLength={18} required />
             </Field>
             <Field label="Nama lengkap">
               <input className="field-input" value={formPegawai.nama || ''} onChange={e => updatePegawai('nama', e.target.value)} required />
@@ -734,8 +981,8 @@ function DashboardPage() {
             </Field>
 
             <div className="form-actions" style={{ gridColumn: 'span 2' }}>
-              <button className="btn-primary" type="submit"><Icon name="check" size={16} /> Simpan data</button>
-              <button className="btn-ghost" type="button" onClick={() => { setIsAdding(false); setSelectedPegawai(null); }}>Batal</button>
+              <button className="btn-primary" type="submit"><Icon name="check" size={16} /> Simpan pembaruan</button>
+              <button className="btn-ghost" type="button" onClick={() => setSelectedPegawai(null)}>Tutup</button>
             </div>
           </form>
 

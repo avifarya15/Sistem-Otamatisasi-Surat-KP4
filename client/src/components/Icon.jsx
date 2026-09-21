@@ -12,8 +12,10 @@ const paths = {
   trash: <><path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6"/></>,
   check: <><path d="m5 12 4 4L19 6"/></>,
   menu: <><path d="M4 6h16M4 12h16M4 18h16"/></>,
-  close: <><path d="M6 6l12 12M18 6 6 18"/></>,
+  close: <path d="M18 6 6 18M6 6l12 12"/>,
   heart: <path d="M20.8 8.6c0 5.4-8.8 10.4-8.8 10.4S3.2 14 3.2 8.6A4.6 4.6 0 0 1 12 6.3a4.6 4.6 0 0 1 8.8 2.3Z"/>,
+  chevronLeft: <path d="m15 18-6-6 6-6"/>,
+  chevronRight: <path d="m9 18 6-6-6-6"/>,
 };
 
 export default function Icon({ name, size = 18, strokeWidth = 1.8, className = '' }) {
