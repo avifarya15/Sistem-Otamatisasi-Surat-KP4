@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Environment variables (BERISI PASSWORD & SECRET!)
+.env
+.env.local
+.env.production
+
+# Build output
+dist/
+build/
+
+# Database lokal
+*.sqlite
+*.sqlite3
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*

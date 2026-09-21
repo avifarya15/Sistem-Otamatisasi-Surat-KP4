@@ -8,7 +8,10 @@ const authMiddleware = async (req, res, next) => {
       return res.status(401).json({ message: 'Authorization header required' });
     }
     const token = authHeader.split(' ')[1];
-    const secret = process.env.JWT_SECRET || 'kp4-secret-key-2024';
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      return res.status(500).json({ message: 'Server configuration error' });
+    }
     const decoded = jwt.verify(token, secret);
     const admin = await Admin.findByPk(decoded.id);
     if (!admin) {

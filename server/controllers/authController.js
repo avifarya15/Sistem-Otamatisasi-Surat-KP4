@@ -13,7 +13,10 @@ const login = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-    const secret = process.env.JWT_SECRET || 'kp4-secret-key-2024';
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      return res.status(500).json({ message: 'Server configuration error' });
+    }
     const token = jwt.sign({ id: admin.id, username: admin.username, role: admin.role }, secret, { expiresIn: '8h' });
     res.json({
       message: 'Login successful',

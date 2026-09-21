@@ -11,14 +11,21 @@ const printRoutes = require('./routes/printRoutes');
 
 const app = express();
 
-const allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174'];
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean);
+const defaultOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174'];
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
-      callback(null, true);
-    } else {
-      callback(null, true);
+    // Izinkan request tanpa origin (Postman, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    // Izinkan origin dari env (production) atau default (development)
+    if (allowedOrigins.includes(origin) || defaultOrigins.includes(origin)) {
+      return callback(null, true);
     }
+    // Development: izinkan localhost
+    if (process.env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))) {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true
 }));
