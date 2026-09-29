@@ -4,6 +4,7 @@ const pegawaiController = require('../controllers/pegawaiController');
 const printController = require('../controllers/printController');
 
 router.post('/validate', pegawaiController.validatePegawai);
+router.post('/complete-data', pegawaiController.completeData);
 router.post('/update-mkg', pegawaiController.updateMasaKerja);
 router.get('/config', pegawaiController.getSystemConfig);
 router.post('/generate', printController.generatePdf);

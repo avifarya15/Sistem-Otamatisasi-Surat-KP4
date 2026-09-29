@@ -31,6 +31,10 @@ const Pasangan = sequelize.define('Pasangan', {
   },
   tanggal_menikah: {
     type: DataTypes.DATEONLY
+  },
+  penghasilan: {
+    type: DataTypes.DECIMAL(15, 0),
+    defaultValue: 0
   }
 }, {
   tableName: 'pasangan',

@@ -5,7 +5,51 @@
  * Kenaikan tiap 2 tahun: 3.15% (0.0315)
  */
 
-// Gaji Pokok Dasar Tahun 2024 pada MKG 0 Tahun
+const path = require('path');
+const fs = require('fs');
+
+let TABEL_GAJI_OFFICIAL = {};
+
+/**
+ * Memuat tabel gaji resmi PP No. 5 Tahun 2024 dari data Excel / JSON
+ */
+function loadTabelGaji() {
+  try {
+    const jsonPath = path.join(__dirname, '..', 'data', 'tabel_gaji_2024.json');
+    if (fs.existsSync(jsonPath)) {
+      TABEL_GAJI_OFFICIAL = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+      return;
+    }
+
+    const excelPath = path.join(__dirname, '..', 'data', 'daftar_gaji_pns_pp5_2024.xlsx');
+    if (fs.existsSync(excelPath)) {
+      const xlsx = require('xlsx');
+      const wb = xlsx.readFile(excelPath);
+      const rows = xlsx.utils.sheet_to_json(wb.Sheets['Data Terstruktur']);
+      const table = {};
+      for (const r of rows) {
+        const golStr = r['Golongan'];
+        if (!golStr) continue;
+        const roman = golStr.replace('Golongan ', '').trim();
+        const mkg = Number(r['MKG']);
+        for (const ruang of ['a', 'b', 'c', 'd', 'e']) {
+          if (r[ruang] != null) {
+            const key = roman + '/' + ruang;
+            if (!table[key]) table[key] = {};
+            table[key][mkg] = Number(r[ruang]);
+          }
+        }
+      }
+      TABEL_GAJI_OFFICIAL = table;
+    }
+  } catch (err) {
+    console.error('[salaryService] Gagal memuat tabel gaji dari Excel/JSON:', err.message);
+  }
+}
+
+loadTabelGaji();
+
+// Gaji Pokok Dasar Tahun 2024 pada MKG 0 Tahun (Fallback)
 const GAJI_DASAR_2024 = {
   // Golongan I (PP No. 5/2024)
   'I/a': 1685700,
@@ -50,21 +94,49 @@ function getPersenKgb() {
 const GOLONGAN_LIST = Object.keys(GAJI_DASAR_2024);
 
 /**
- * Normalisasi string golongan (misal 'iii/a' atau 'III/A' -> 'III/a', 'ix' -> 'IX')
+ * Normalisasi string golongan (misal '3/c', '3c', 'iii/c', 'III/C' -> 'III/c', '4/a' -> 'IV/a', 'ix' -> 'IX')
  */
 function normalizeGolongan(golongan) {
   if (!golongan) return '';
-  const trimmed = String(golongan).trim();
-  const parts = trimmed.split('/');
-  if (parts.length === 2) {
-    return `${parts[0].toUpperCase()}/${parts[1].toLowerCase()}`;
+  let str = String(golongan).trim().replace(/\s+/g, '').replace(/[.-]/g, '/');
+
+  // Jika formatnya '3c' (tanpa slash), ubah menjadi '3/c'
+  if (!str.includes('/')) {
+    const match = str.match(/^([0-9]+|[IVXLCDM]+)([a-eA-E])$/i);
+    if (match) {
+      str = `${match[1]}/${match[2]}`;
+    }
   }
-  return trimmed.toUpperCase();
+
+  const parts = str.split('/');
+  if (parts.length === 2) {
+    let tingkat = parts[0].toUpperCase();
+    const ruang = parts[1].toLowerCase();
+
+    // Konversi angka latin biasa (1, 2, 3, 4) menjadi angka Romawi (I, II, III, IV)
+    const romanMap = {
+      '1': 'I',
+      '2': 'II',
+      '3': 'III',
+      '4': 'IV',
+      '9': 'IX'
+    };
+    if (romanMap[tingkat]) {
+      tingkat = romanMap[tingkat];
+    }
+
+    return `${tingkat}/${ruang}`;
+  }
+
+  const pppkMap = { '9': 'IX' };
+  const upper = str.toUpperCase();
+  return pppkMap[upper] || upper;
 }
 
 /**
  * Hitung gaji pokok berdasarkan Golongan dan MKG Tahun.
- * Kenaikan tiap 2 tahun masa kerja adalah persenKgb (default 3.15%) dari data dasar tahun 2024.
+ * Mengutamakan tabel nominal resmi dari Excel (PP No. 5 Tahun 2024),
+ * dan fallback ke kalkulasi jika menggunakan custom persentase atau golongan khusus.
  * @param {string} golongan - Golongan ruang (e.g. 'III/a', 'III/c', 'IX')
  * @param {number} mkgTahun - Masa Kerja Golongan dalam tahun (diinput oleh user)
  * @param {number} [customPersen] - Persen custom (opsional)
@@ -72,15 +144,38 @@ function normalizeGolongan(golongan) {
  */
 function getGajiPokok(golongan, mkgTahun, customPersen = null) {
   const normGol = normalizeGolongan(golongan);
-  const baseSalary = GAJI_DASAR_2024[normGol];
+  const tahun = Math.max(0, Math.floor(Number(mkgTahun) || 0));
+
+  // 1. Jika tidak ada custom persen khusus, ambil nominal persis dari tabel resmi Excel PP 5/2024
+  if (customPersen == null && TABEL_GAJI_OFFICIAL[normGol]) {
+    const golTable = TABEL_GAJI_OFFICIAL[normGol];
+
+    // Jika ada nilai persis pada MKG tersebut
+    if (golTable[tahun] != null) {
+      return golTable[tahun];
+    }
+
+    // Jika MKG ganjil (1, 3, 5, dst.), gunakan MKG genap sebelumnya (0, 2, 4, dst.)
+    const mkgFloor = Math.floor(tahun / 2) * 2;
+    if (golTable[mkgFloor] != null) {
+      return golTable[mkgFloor];
+    }
+
+    // Jika masa kerja melebihi batas maksimum pada tabel (misal > 32 tahun), gunakan nilai batas tertinggi
+    const mkgKeys = Object.keys(golTable).map(Number).sort((a, b) => a - b);
+    if (mkgKeys.length > 0 && tahun >= mkgKeys[mkgKeys.length - 1]) {
+      return golTable[mkgKeys[mkgKeys.length - 1]];
+    }
+  }
+
+  // 2. Fallback jika golongan tidak ada di tabel atau menggunakan customPersen
+  const baseSalary =
+    (TABEL_GAJI_OFFICIAL[normGol] && TABEL_GAJI_OFFICIAL[normGol][0]) || GAJI_DASAR_2024[normGol];
   if (!baseSalary) return null;
 
-  const rate = customPersen != null ? (Number(customPersen) / 100) : persenKenaikan2Tahun;
-  const tahun = Math.max(0, Math.floor(Number(mkgTahun) || 0));
+  const rate = customPersen != null ? Number(customPersen) / 100 : persenKenaikan2Tahun;
   const stepKenaikan = Math.floor(tahun / 2); // Tiap 2 tahun
-  // Rumus: Base 2024 * (1 + rate)^step
-  const gajiHasil = Math.round(baseSalary * Math.pow(1 + rate, stepKenaikan));
-  return gajiHasil;
+  return Math.round(baseSalary * Math.pow(1 + rate, stepKenaikan));
 }
 
 /**
@@ -93,6 +188,82 @@ function hitungKenaikanKgb(gajiSekarang, customPersen = null) {
   const rate = customPersen != null ? (Number(customPersen) / 100) : persenKenaikan2Tahun;
   const current = Number(gajiSekarang) || 0;
   return Math.round(current * (1 + rate));
+}
+
+/**
+ * Hitung Masa Kerja Golongan (MKG) OTOMATIS dari TMT Pangkat.
+ *
+ * Aturan BKN (Peraturan Resmi):
+ * 1. Naik pangkat DALAM rumpun golongan yang sama (misal III/a → III/b):
+ *    MKG di golongan baru dimulai dari 0 Tahun 0 Bulan.
+ *    → Gunakan tanggal tmt_pangkat sebagai titik mulai MKG.
+ *
+ * 2. Naik pangkat yang PINDAH golongan utama (misal II → III via Penyesuaian Ijazah/Ujian Dinas):
+ *    MKG tidak nol murni, melainkan dipotong sesuai ketentuan BKN:
+ *    - Pindah dari Gol I ke Gol II: MKG lama dikurangi 6 tahun
+ *    - Pindah dari Gol II ke Gol III: MKG lama dikurangi 5 tahun
+ *    → Pada kasus ini, mkg_offset (negatif) disimpan di DB untuk mengurangi hasil auto-hitung.
+ *
+ * Untuk pegawai baru yang tidak pernah naik pangkat, TMT Pangkat = TMT CPNS.
+ *
+ * @param {string|Date|null} tmtPangkat - TMT golongan efektif saat ini (atau TMT CPNS jika baru)
+ * @param {string|Date|null} tmtCpns   - TMT CPNS sebagai fallback
+ * @param {number} [mkgOffset=0]        - Offset (dalam bulan, bisa negatif) akibat potongan lintas golongan
+ * @returns {{ tahun: number, bulan: number, refDate: string, sumberTmt: string }}
+ */
+function hitungMKGOtomatis(tmtPangkat, tmtCpns, mkgOffset = 0) {
+  const now = new Date();
+
+  let refDate = null;
+  let sumberTmt = 'TMT CPNS';
+
+  if (tmtPangkat) {
+    const d = new Date(tmtPangkat);
+    if (!isNaN(d.getTime())) {
+      refDate = d;
+      sumberTmt = 'TMT Pangkat';
+    }
+  }
+
+  if (!refDate && tmtCpns) {
+    const d = new Date(tmtCpns);
+    if (!isNaN(d.getTime())) {
+      refDate = d;
+      sumberTmt = 'TMT CPNS';
+    }
+  }
+
+  if (!refDate) {
+    return { tahun: 0, bulan: 0, refDate: null, sumberTmt: 'Tidak diketahui' };
+  }
+
+  // Hitung selisih bulan dari referensi hingga sekarang
+  let totalBulan =
+    (now.getFullYear() - refDate.getFullYear()) * 12 +
+    (now.getMonth() - refDate.getMonth());
+  if (now.getDate() < refDate.getDate()) totalBulan--;
+
+  // Terapkan offset (misal: potongan lintas golongan II→III = -5 tahun = -60 bulan)
+  totalBulan = totalBulan + (mkgOffset * 12); // mkgOffset dalam TAHUN
+  if (totalBulan < 0) totalBulan = 0;
+
+  const tahun = Math.floor(totalBulan / 12);
+  const bulan = totalBulan % 12;
+  const refDateStr = refDate.toISOString().split('T')[0];
+
+  return { tahun, bulan, refDate: refDateStr, sumberTmt };
+}
+
+/**
+ * Mendapatkan golongan utama (angka roman: I, II, III, IV)
+ * @param {string} golongan - misal 'III/c', 'II/a', 'IV/b'
+ * @returns {string} - 'I', 'II', 'III', 'IV', atau ''
+ */
+function getGolonganUtama(golongan) {
+  const norm = normalizeGolongan(golongan);
+  if (!norm) return '';
+  const parts = norm.split('/');
+  return parts[0] || '';
 }
 
 /**
@@ -182,11 +353,15 @@ function hitungTunjanganKeluarga(gajiPokok, jumlahPasangan, jumlahAnakTanggungan
 module.exports = {
   GAJI_DASAR_2024,
   GOLONGAN_LIST,
+  TABEL_GAJI_OFFICIAL,
   normalizeGolongan,
   getGajiPokok,
   hitungKenaikanKgb,
+  hitungMKGOtomatis,
+  getGolonganUtama,
   hitungMasaKerjaDanGaji,
   hitungTunjanganKeluarga,
   setPersenKgb,
   getPersenKgb
 };
+

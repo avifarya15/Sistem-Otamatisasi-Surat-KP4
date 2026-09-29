@@ -1,5 +1,5 @@
 const { Pegawai, Pasangan, Anak, LogAktivitas, Pengaturan } = require('../models');
-const { hitungMasaKerjaDanGaji, hitungTunjanganKeluarga, getGajiPokok, hitungKenaikanKgb, getPersenKgb, setPersenKgb } = require('../services/salaryService');
+const { hitungMasaKerjaDanGaji, hitungTunjanganKeluarga, getGajiPokok, hitungKenaikanKgb, getPersenKgb, setPersenKgb, hitungMKGOtomatis } = require('../services/salaryService');
 
 const cleanBody = (obj) => {
   if (!obj || typeof obj !== 'object') return obj;
@@ -54,7 +54,18 @@ const getPegawaiByNip = async (req, res) => {
 const createPegawai = async (req, res) => {
   try {
     const payload = cleanBody(req.body);
-    // Jika gaji_pokok belum diisi tetapi golongan & mkg_tahun diisi, hitung otomatis (+3.15% per 2 thn acuan 2024)
+    const tmtPkt = payload.tmt_pangkat || payload.tmt_cpns;
+    const tmtCpns = payload.tmt_cpns;
+    const mkgOff = Number(payload.mkg_offset || 0);
+
+    // Hitung MKG otomatis jika TMT tersedia
+    if (tmtPkt || tmtCpns) {
+      const autoMkg = hitungMKGOtomatis(tmtPkt, tmtCpns, mkgOff);
+      payload.mkg_tahun = autoMkg.tahun;
+      payload.mkg_bulan = autoMkg.bulan;
+    }
+
+    // Jika gaji_pokok belum diisi, hitung otomatis dari tabel PP 5/2024
     if (!payload.gaji_pokok && payload.golongan && payload.mkg_tahun != null) {
       const gajiOtomatis = getGajiPokok(payload.golongan, Number(payload.mkg_tahun));
       if (gajiOtomatis) {
@@ -75,13 +86,31 @@ const updatePegawai = async (req, res) => {
     const pegawai = await Pegawai.findOne({ where: { nip } });
     if (!pegawai) return res.status(404).json({ message: 'Not found' });
     const payload = cleanBody(req.body);
-    // Jika gaji_pokok kosong/null dan ada perubahan golongan & mkg_tahun, hitung otomatis
-    if (!payload.gaji_pokok && payload.golongan && payload.mkg_tahun != null) {
-      const gajiOtomatis = getGajiPokok(payload.golongan, Number(payload.mkg_tahun));
-      if (gajiOtomatis) {
-        payload.gaji_pokok = gajiOtomatis;
+
+    const tmtPkt = payload.tmt_pangkat !== undefined ? payload.tmt_pangkat : pegawai.tmt_pangkat;
+    const tmtCpns = payload.tmt_cpns !== undefined ? payload.tmt_cpns : pegawai.tmt_cpns;
+    const mkgOff = payload.mkg_offset !== undefined ? Number(payload.mkg_offset || 0) : Number(pegawai.mkg_offset || 0);
+
+    // Jika ada update TMT atau offset, hitung MKG otomatis
+    if (tmtPkt || tmtCpns) {
+      const autoMkg = hitungMKGOtomatis(tmtPkt, tmtCpns, mkgOff);
+      // Sinkronkan MKG tahun & bulan
+      payload.mkg_tahun = autoMkg.tahun;
+      payload.mkg_bulan = autoMkg.bulan;
+    }
+
+    // Jika gaji_pokok kosong atau tidak diubah, sinkronkan gaji pokok jika golongan atau MKG berubah
+    if (!payload.gaji_pokok) {
+      const gol = payload.golongan || pegawai.golongan;
+      const thn = payload.mkg_tahun != null ? payload.mkg_tahun : pegawai.mkg_tahun;
+      if (gol && thn != null) {
+        const gajiOtomatis = getGajiPokok(gol, Number(thn));
+        if (gajiOtomatis) {
+          payload.gaji_pokok = gajiOtomatis;
+        }
       }
     }
+
     await pegawai.update(payload);
     await logActivity(req, `Update Pegawai NIP ${nip}`, payload);
     res.json(pegawai);

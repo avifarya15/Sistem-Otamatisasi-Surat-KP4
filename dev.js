@@ -7,12 +7,12 @@ const clientDir = path.join(rootDir, 'client');
 
 const isWin = process.platform === 'win32';
 const npmCmd = isWin ? 'npm.cmd' : 'npm';
-const nodeCmd = 'node';
+const npxCmd = isWin ? 'npx.cmd' : 'npx';
 
 console.log('🚀 Memulai sistem KP4 (Backend + Frontend)...');
 console.log('--------------------------------------------------');
 
-const serverProc = spawn(nodeCmd, ['server.js'], {
+const serverProc = spawn(npxCmd, ['nodemon', 'server.js', '--watch', '.', '--ext', 'js', '--ignore', 'node_modules'], {
   cwd: serverDir,
   stdio: 'inherit',
   shell: true

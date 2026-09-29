@@ -38,6 +38,11 @@ const Pegawai = sequelize.define('Pegawai', {
     type: DataTypes.DATEONLY,
     allowNull: true
   },
+  tmt_pangkat: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+    comment: 'TMT efektif golongan/pangkat saat ini. MKG otomatis dihitung dari tanggal ini.'
+  },
   mkg_tahun: {
     type: DataTypes.INTEGER,
     defaultValue: 0
@@ -45,6 +50,11 @@ const Pegawai = sequelize.define('Pegawai', {
   mkg_bulan: {
     type: DataTypes.INTEGER,
     defaultValue: 0
+  },
+  mkg_offset: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+    comment: 'Offset MKG dalam tahun (negatif = potongan). Diisi admin untuk kasus naik pangkat lintas golongan utama. I→II: -6, II→III: -5'
   },
   status_kgb: {
     type: DataTypes.STRING(20),

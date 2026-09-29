@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../api/axios';
 import Icon from '../components/Icon';
+import TABEL_GAJI_OFFICIAL from '../data/tabel_gaji_2024.json';
 
 const dateOnly = (value) => value ? String(value).split('T')[0] : '';
 const prettyDate = (value) => value ? new Date(value).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 const formatRupiah = (val) => val == null ? '—' : 'Rp ' + Number(val).toLocaleString('id-ID');
 
-// Tabel dasar 2024 untuk client-side helper
+// Tabel dasar 2024 untuk client-side helper (fallback)
 const GAJI_DASAR_2024 = {
   'I/a': 1685700, 'I/b': 1840800, 'I/c': 1918700, 'I/d': 1999900,
   'II/a': 2184000, 'II/b': 2385000, 'II/c': 2485900, 'II/d': 2591100,
@@ -15,16 +16,81 @@ const GAJI_DASAR_2024 = {
   'IX': 3203300
 };
 
-const hitungGajiOtomatis2024 = (golongan, mkgTahun, persenRate = 3.15) => {
-  if (!golongan) return null;
+const normalizeGolongan = (golongan) => {
+  if (!golongan) return '';
   const trimmed = String(golongan).trim();
   const parts = trimmed.split('/');
-  const norm = parts.length === 2 ? `${parts[0].toUpperCase()}/${parts[1].toLowerCase()}` : trimmed.toUpperCase();
+  if (parts.length === 2) {
+    return `${parts[0].toUpperCase()}/${parts[1].toLowerCase()}`;
+  }
+  return trimmed.toUpperCase();
+};
+
+const hitungGajiOtomatis2024 = (golongan, mkgTahun, persenRate = 3.15) => {
+  if (!golongan) return null;
+  const norm = normalizeGolongan(golongan);
+  const tahun = Math.max(0, Math.floor(Number(mkgTahun) || 0));
+
+  // Ambil langsung dari tabel resmi PP No. 5 Tahun 2024 jika cocok
+  if (TABEL_GAJI_OFFICIAL && TABEL_GAJI_OFFICIAL[norm]) {
+    const table = TABEL_GAJI_OFFICIAL[norm];
+    if (table[tahun] != null) return table[tahun];
+    const mkgFloor = Math.floor(tahun / 2) * 2;
+    if (table[mkgFloor] != null) return table[mkgFloor];
+    const keys = Object.keys(table).map(Number).sort((a, b) => a - b);
+    if (keys.length > 0 && tahun >= keys[keys.length - 1]) {
+      return table[keys[keys.length - 1]];
+    }
+  }
+
   const base = GAJI_DASAR_2024[norm];
   if (!base) return null;
-  const steps = Math.floor(Math.max(0, Number(mkgTahun) || 0) / 2);
+  const steps = Math.floor(tahun / 2);
   const rate = (Number(persenRate) || 3.15) / 100;
   return Math.round(base * Math.pow(1 + rate, steps));
+};
+
+const hitungMKGClient = (tmtPangkat, tmtCpns, offsetTahun = 0) => {
+  let refDate = null;
+  let sumber = 'Belum diisi';
+
+  if (tmtPangkat) {
+    const d = new Date(tmtPangkat);
+    if (!isNaN(d.getTime())) {
+      refDate = d;
+      sumber = 'TMT Pangkat';
+    }
+  }
+  if (!refDate && tmtCpns) {
+    const d = new Date(tmtCpns);
+    if (!isNaN(d.getTime())) {
+      refDate = d;
+      sumber = 'TMT CPNS';
+    }
+  }
+
+  if (!refDate) {
+    return { tahun: 0, bulan: 0, sumber: 'Belum diisi', refDateStr: null };
+  }
+
+  const now = new Date();
+  let totalBulan =
+    (now.getFullYear() - refDate.getFullYear()) * 12 +
+    (now.getMonth() - refDate.getMonth());
+  if (now.getDate() < refDate.getDate()) totalBulan--;
+
+  totalBulan += (Number(offsetTahun) || 0) * 12;
+  if (totalBulan < 0) totalBulan = 0;
+
+  const tahun = Math.floor(totalBulan / 12);
+  const bulan = totalBulan % 12;
+
+  return {
+    tahun,
+    bulan,
+    sumber,
+    refDateStr: refDate.toISOString().split('T')[0]
+  };
 };
 
 function Field({ label, hint, children }) {
@@ -85,13 +151,17 @@ function DashboardPage() {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isAdding) {
-        setIsAdding(false);
+      if (e.key === 'Escape') {
+        if (isAdding) setIsAdding(false);
+        if (selectedPegawai) {
+          setSelectedPegawai(null);
+          setSelectedNip(null);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isAdding]);
+  }, [isAdding, selectedPegawai]);
 
   const fetchPegawaiList = async () => {
     setLoading(true);
@@ -162,8 +232,10 @@ function DashboardPage() {
         jabatan: res.data.jabatan,
         unit_kerja: res.data.unit_kerja,
         gaji_pokok: res.data.gaji_pokok,
+        tmt_pangkat: res.data.tmt_pangkat || '',
         tmt_cpns: res.data.tmt_cpns || '',
         tmt_kgb_terakhir: res.data.tmt_kgb_terakhir || '',
+        mkg_offset: res.data.mkg_offset ?? 0,
         mkg_tahun: res.data.mkg_tahun ?? 0,
         mkg_bulan: res.data.mkg_bulan ?? 0,
         status_kgb: res.data.status_kgb || 'Normal'
@@ -179,7 +251,40 @@ function DashboardPage() {
   };
 
   const updatePegawai = (key, value) => {
-    setFormPegawai(prev => ({ ...prev, [key]: value }));
+    setFormPegawai(prev => {
+      const next = { ...prev, [key]: value };
+      if (key === 'tmt_pangkat' || key === 'tmt_cpns' || key === 'mkg_offset') {
+        const tmtPkt = key === 'tmt_pangkat' ? value : prev.tmt_pangkat;
+        const tmtCpns = key === 'tmt_cpns' ? value : prev.tmt_cpns;
+        const mkgOff = key === 'mkg_offset' ? value : prev.mkg_offset;
+        if (tmtPkt || tmtCpns) {
+          const autoMkg = hitungMKGClient(tmtPkt, tmtCpns, mkgOff);
+          next.mkg_tahun = autoMkg.tahun;
+          next.mkg_bulan = autoMkg.bulan;
+          if (next.golongan && !prev._manualGaji) {
+            const autoGaji = hitungGajiOtomatis2024(next.golongan, autoMkg.tahun, persenSetting);
+            if (autoGaji) next.gaji_pokok = autoGaji;
+          }
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleSyncMkgDariTmt = () => {
+    const autoMkg = hitungMKGClient(formPegawai.tmt_pangkat, formPegawai.tmt_cpns, formPegawai.mkg_offset);
+    setFormPegawai(prev => {
+      const updated = {
+        ...prev,
+        mkg_tahun: autoMkg.tahun,
+        mkg_bulan: autoMkg.bulan
+      };
+      if (prev.golongan && !prev._manualGaji) {
+        const autoGaji = hitungGajiOtomatis2024(prev.golongan, autoMkg.tahun, persenSetting);
+        if (autoGaji) updated.gaji_pokok = autoGaji;
+      }
+      return updated;
+    });
   };
 
   const handleMkgTahunChange = (e) => {
@@ -221,6 +326,10 @@ function DashboardPage() {
     try {
       const payload = {
         ...formPegawai,
+        tmt_pangkat: formPegawai.tmt_pangkat || null,
+        tmt_cpns: formPegawai.tmt_cpns || null,
+        tmt_kgb_terakhir: formPegawai.tmt_kgb_terakhir || null,
+        mkg_offset: Number(formPegawai.mkg_offset) || 0,
         mkg_tahun: Number(formPegawai.mkg_tahun) || 0,
         mkg_bulan: Number(formPegawai.mkg_bulan) || 0
       };
@@ -433,7 +542,7 @@ function DashboardPage() {
                   <Icon name="search" size={16} />
                   <input placeholder="Cari nama, NIP, atau golongan…" value={query} onChange={e => setQuery(e.target.value)} />
                 </div>
-                <button className="btn-primary" onClick={() => { setActiveTab('direktori'); setIsAdding(true); setSelectedPegawai(null); setSelectedNip(null); setFormPegawai({ mkg_tahun: 0, mkg_bulan: 0, status_kgb: 'Normal' }); }}>
+                <button className="btn-primary" onClick={() => { setActiveTab('direktori'); setIsAdding(true); setSelectedPegawai(null); setSelectedNip(null); setFormPegawai({ mkg_tahun: 0, mkg_bulan: 0, mkg_offset: 0, tmt_pangkat: '', tmt_cpns: '', status_kgb: 'Normal' }); }}>
                   <Icon name="plus" size={17} /> Pegawai baru
                 </button>
               </div>
@@ -466,6 +575,12 @@ function DashboardPage() {
                         <td><span className="grade-pill">{p.golongan || '—'}</span></td>
                         <td>
                           <strong>{p.mkg_tahun ?? 0} Thn</strong> {p.mkg_bulan ?? 0} Bln
+                          {(p.tmt_pangkat || p.tmt_cpns) && (
+                            <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                              TMT: {prettyDate(p.tmt_pangkat || p.tmt_cpns)}
+                              {p.mkg_offset ? ` (${p.mkg_offset > 0 ? '+' : ''}${p.mkg_offset}th)` : ''}
+                            </div>
+                          )}
                         </td>
                         <td>{formatRupiah(p.gaji_pokok)}</td>
                         <td>
@@ -804,10 +919,74 @@ function DashboardPage() {
                 </div>
 
                 <div className="form-section-title">
-                  <Icon name="file" size={15} /> Masa Kerja & Riwayat KGB
+                  <Icon name="file" size={15} /> Tanggal TMT & Riwayat Pangkat
                 </div>
                 <div className="form-grid">
-                  <Field label="Masa Kerja Golongan (Tahun)" hint="0–40 tahun">
+                  <Field label="TMT Pangkat / Golongan Efektif" hint="Tanggal SK pangkat/golongan terakhir (MKG dihitung dari tanggal ini)">
+                    <input
+                      className="field-input"
+                      type="date"
+                      value={dateOnly(formPegawai.tmt_pangkat)}
+                      onChange={e => updatePegawai('tmt_pangkat', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="TMT CPNS / Pengangkatan Pertama" hint="Tanggal pertama diangkat sebagai CPNS/PNS">
+                    <input
+                      className="field-input"
+                      type="date"
+                      value={dateOnly(formPegawai.tmt_cpns)}
+                      onChange={e => updatePegawai('tmt_cpns', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Offset MKG (Potongan Lintas Golongan)" hint="Aturan BKN: isi -6 jika pindah I→II, isi -5 jika pindah II→III (Tahun)">
+                    <input
+                      className="field-input"
+                      type="number"
+                      step="1"
+                      min="-15"
+                      max="10"
+                      value={formPegawai.mkg_offset ?? 0}
+                      onChange={e => updatePegawai('mkg_offset', e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="0"
+                    />
+                  </Field>
+                  <Field label="TMT KGB Terakhir" hint="Tanggal SK kenaikan gaji berkala terakhir">
+                    <input
+                      className="field-input"
+                      type="date"
+                      value={dateOnly(formPegawai.tmt_kgb_terakhir)}
+                      onChange={e => updatePegawai('tmt_kgb_terakhir', e.target.value)}
+                    />
+                  </Field>
+                </div>
+
+                <div className="form-section-title">
+                  <Icon name="clock" size={15} /> Masa Kerja Golongan (MKG)
+                </div>
+
+                <div style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: '12px', padding: '12px 16px', marginBottom: '14px', fontSize: '0.82rem', color: '#0369A1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                  <div>
+                    <strong>Kalkulasi MKG Otomatis: </strong>
+                    <span style={{ fontWeight: 700, color: '#0284C7' }}>
+                      {hitungMKGClient(formPegawai.tmt_pangkat, formPegawai.tmt_cpns, formPegawai.mkg_offset).tahun} Tahun {hitungMKGClient(formPegawai.tmt_pangkat, formPegawai.tmt_cpns, formPegawai.mkg_offset).bulan} Bulan
+                    </span>
+                    <span style={{ marginLeft: '8px', color: '#64748B', fontSize: '0.75rem' }}>
+                      (Acuan: {hitungMKGClient(formPegawai.tmt_pangkat, formPegawai.tmt_cpns, formPegawai.mkg_offset).sumber}
+                      {Number(formPegawai.mkg_offset) ? `, offset: ${formPegawai.mkg_offset} thn` : ''})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-helper-calc"
+                    style={{ padding: '6px 12px', fontSize: '0.72rem' }}
+                    onClick={handleSyncMkgDariTmt}
+                  >
+                    Sinkronkan ke Form
+                  </button>
+                </div>
+
+                <div className="form-grid">
+                  <Field label="Masa Kerja Golongan (Tahun)" hint="Otomatis dari TMT atau ubah manual (0–40)">
                     <input
                       className="field-input"
                       type="number"
@@ -818,7 +997,7 @@ function DashboardPage() {
                       required
                     />
                   </Field>
-                  <Field label="Masa Kerja Golongan (Bulan)" hint="0–11 bulan">
+                  <Field label="Masa Kerja Golongan (Bulan)" hint="Otomatis dari TMT atau ubah manual (0–11)">
                     <input
                       className="field-input"
                       type="number"
@@ -827,12 +1006,6 @@ function DashboardPage() {
                       value={formPegawai.mkg_bulan ?? ''}
                       onChange={e => updatePegawai('mkg_bulan', e.target.value === '' ? '' : Number(e.target.value))}
                     />
-                  </Field>
-                  <Field label="TMT CPNS / Pengangkatan">
-                    <input className="field-input" type="date" value={dateOnly(formPegawai.tmt_cpns)} onChange={e => updatePegawai('tmt_cpns', e.target.value)} />
-                  </Field>
-                  <Field label="TMT KGB Terakhir">
-                    <input className="field-input" type="date" value={dateOnly(formPegawai.tmt_kgb_terakhir)} onChange={e => updatePegawai('tmt_kgb_terakhir', e.target.value)} />
                   </Field>
                 </div>
 
@@ -882,281 +1055,375 @@ function DashboardPage() {
         </div>
       )}
 
-      {/* DETAIL PROFIL PEGAWAI (KETIKA KLIK BUKA PADA TABEL) */}
+      {/* MODAL WINDOW / DIALOG BOX: DETAIL PROFIL & RIWAYAT PEGAWAI */}
       {selectedPegawai && (
-        <section className="soft-card detail-card fade-up">
-          <div className="detail-header">
-            <div>
-              <div className="eyebrow">Profil pegawai</div>
-              <h2>{selectedPegawai.nama}</h2>
-              <p>NIP {selectedPegawai.nip} · {selectedPegawai.unit_kerja || 'Unit kerja belum diisi'}</p>
-            </div>
-            <button className="close-detail" onClick={() => { setSelectedPegawai(null); setSelectedNip(null); }}>
-              <Icon name="close" size={18} />
-            </button>
-          </div>
-
-          <form onSubmit={handleSavePegawai} className="form-grid">
-            <Field label="NIP">
-              <input className="field-input" value={formPegawai.nip || ''} onChange={e => updatePegawai('nip', e.target.value)} readOnly maxLength={18} required />
-            </Field>
-            <Field label="Nama lengkap">
-              <input className="field-input" value={formPegawai.nama || ''} onChange={e => updatePegawai('nama', e.target.value)} required />
-            </Field>
-            <Field label="Tempat lahir">
-              <input className="field-input" value={formPegawai.tempat_lahir || ''} onChange={e => updatePegawai('tempat_lahir', e.target.value)} />
-            </Field>
-            <Field label="Tanggal lahir">
-              <input className="field-input" type="date" value={dateOnly(formPegawai.tanggal_lahir)} onChange={e => updatePegawai('tanggal_lahir', e.target.value)} required />
-            </Field>
-
-            <Field label="Golongan" hint="Contoh: III/a, III/c, IV/a, IX">
-              <input className="field-input" value={formPegawai.golongan || ''} onChange={handleGolonganChange} placeholder="III/c" />
-            </Field>
-            <Field label="Jabatan">
-              <input className="field-input" value={formPegawai.jabatan || ''} onChange={e => updatePegawai('jabatan', e.target.value)} />
-            </Field>
-            <Field label="Unit kerja">
-              <input className="field-input" value={formPegawai.unit_kerja || ''} onChange={e => updatePegawai('unit_kerja', e.target.value)} />
-            </Field>
-
-            {/* INPUT MASA KERJA OLEH USER */}
-            <Field label="Masa Kerja Golongan (Tahun)" hint="Diinput langsung oleh user (0–40)">
-              <input
-                className="field-input"
-                type="number"
-                min="0"
-                max="40"
-                value={formPegawai.mkg_tahun ?? ''}
-                onChange={handleMkgTahunChange}
-                required
-              />
-            </Field>
-            <Field label="Masa Kerja Golongan (Bulan)" hint="Diinput langsung oleh user (0–11)">
-              <input
-                className="field-input"
-                type="number"
-                min="0"
-                max="11"
-                value={formPegawai.mkg_bulan ?? ''}
-                onChange={e => updatePegawai('mkg_bulan', e.target.value === '' ? '' : Number(e.target.value))}
-              />
-            </Field>
-
-            <Field label="TMT CPNS / Pengangkatan">
-              <input className="field-input" type="date" value={dateOnly(formPegawai.tmt_cpns)} onChange={e => updatePegawai('tmt_cpns', e.target.value)} />
-            </Field>
-            <Field label="TMT KGB Terakhir">
-              <input className="field-input" type="date" value={dateOnly(formPegawai.tmt_kgb_terakhir)} onChange={e => updatePegawai('tmt_kgb_terakhir', e.target.value)} />
-            </Field>
-
-            <Field label="Status KGB">
-              <select className="field-input" value={formPegawai.status_kgb || 'Normal'} onChange={e => updatePegawai('status_kgb', e.target.value)}>
-                <option value="Normal">Normal</option>
-                <option value="Waktunya KGB">Waktunya KGB (Perlu Kenaikan {persenSetting}%)</option>
-              </select>
-            </Field>
-
-            <Field label="Gaji Pokok (Rp)" hint="Bisa diinput manual atau dihitung otomatis">
-              <div className="salary-input-wrap">
-                <input
-                  className="field-input"
-                  type="number"
-                  value={formPegawai.gaji_pokok || ''}
-                  onChange={e => {
-                    updatePegawai('gaji_pokok', e.target.value);
-                    updatePegawai('_manualGaji', true);
-                  }}
-                  required
-                />
-                <button
-                  type="button"
-                  className="btn-helper-calc"
-                  onClick={handleHitungOtomatisGaji}
-                  title={`Hitung otomatis berdasarkan acuan 2024 dengan kenaikan ${persenSetting}% per 2 tahun masa kerja`}
-                >
-                  Hitung {persenSetting}%
-                </button>
+        <div className="modal-overlay" onClick={() => { setSelectedPegawai(null); setSelectedNip(null); }}>
+          <div className="modal-dialog" onClick={e => e.stopPropagation()} style={{ maxWidth: '920px' }}>
+            <div className="modal-header">
+              <div className="modal-title-group">
+                <div className="modal-title-badge">
+                  <Icon name="users" size={20} strokeWidth={2.4} />
+                </div>
+                <div>
+                  <div className="eyebrow" style={{ color: '#0284C7', marginBottom: '2px' }}>Profil & Riwayat Pegawai</div>
+                  <h2>{selectedPegawai.nama}</h2>
+                  <p>NIP {selectedPegawai.nip} · {selectedPegawai.unit_kerja || 'Unit kerja belum diisi'}</p>
+                </div>
               </div>
-            </Field>
-
-            <div className="form-actions" style={{ gridColumn: 'span 2' }}>
-              <button className="btn-primary" type="submit"><Icon name="check" size={16} /> Simpan pembaruan</button>
-              <button className="btn-ghost" type="button" onClick={() => setSelectedPegawai(null)}>Tutup</button>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => { setSelectedPegawai(null); setSelectedNip(null); }}
+                title="Tutup Jendela (Esc)"
+              >
+                <Icon name="close" size={16} strokeWidth={2.2} />
+                <span>Tutup</span>
+              </button>
             </div>
-          </form>
 
-          {selectedPegawai && (
-            <div className="family-management">
-              <div className="subsection">
-                <div className="subsection-head">
-                  <div>
-                    <h3>Pasangan</h3>
-                    <p>{selectedPegawai.pasangan?.length ? 'Informasi pasangan pegawai.' : 'Belum ada informasi pasangan.'}</p>
-                  </div>
-                  {!selectedPegawai.pasangan?.length && !isAddingPasangan && (
-                    <button className="btn-ghost small" onClick={() => { setIsAddingPasangan(true); setFormPasangan({}); }}>
-                      <Icon name="plus" size={14} /> Tambah
-                    </button>
-                  )}
+            <div className="modal-body">
+              <form onSubmit={handleSavePegawai}>
+                <div className="form-section-title">
+                  <Icon name="users" size={15} /> Informasi Pribadi & Jabatan
+                </div>
+                <div className="form-grid">
+                  <Field label="NIP">
+                    <input className="field-input" value={formPegawai.nip || ''} onChange={e => updatePegawai('nip', e.target.value)} readOnly maxLength={18} required />
+                  </Field>
+                  <Field label="Nama lengkap">
+                    <input className="field-input" value={formPegawai.nama || ''} onChange={e => updatePegawai('nama', e.target.value)} required />
+                  </Field>
+                  <Field label="Tempat lahir">
+                    <input className="field-input" value={formPegawai.tempat_lahir || ''} onChange={e => updatePegawai('tempat_lahir', e.target.value)} />
+                  </Field>
+                  <Field label="Tanggal lahir">
+                    <input className="field-input" type="date" value={dateOnly(formPegawai.tanggal_lahir)} onChange={e => updatePegawai('tanggal_lahir', e.target.value)} required />
+                  </Field>
+
+                  <Field label="Golongan" hint="Contoh: III/a, III/c, IV/a, IX">
+                    <input className="field-input" value={formPegawai.golongan || ''} onChange={handleGolonganChange} placeholder="III/c" />
+                  </Field>
+                  <Field label="Jabatan">
+                    <input className="field-input" value={formPegawai.jabatan || ''} onChange={e => updatePegawai('jabatan', e.target.value)} />
+                  </Field>
+                  <Field label="Unit kerja" style={{ gridColumn: 'span 2' }}>
+                    <input className="field-input" value={formPegawai.unit_kerja || ''} onChange={e => updatePegawai('unit_kerja', e.target.value)} />
+                  </Field>
                 </div>
 
-                {selectedPegawai.pasangan?.length > 0 && !editingPasangan && !isAddingPasangan && (
-                  <div className="family-record">
-                    <div>
-                      <strong>{selectedPegawai.pasangan[0].nama}</strong>
-                      <span>
-                        {selectedPegawai.pasangan[0].pekerjaan || 'Pekerjaan belum diisi'} · {selectedPegawai.pasangan[0].tempat_lahir ? `${selectedPegawai.pasangan[0].tempat_lahir}, ` : ''}{prettyDate(selectedPegawai.pasangan[0].tanggal_lahir)}
-                      </span>
-                    </div>
-                    <div>
-                      <button className="text-action" onClick={() => {
-                        const p = selectedPegawai.pasangan[0];
-                        setEditingPasangan(true);
-                        setFormPasangan({
-                          id: p.id,
-                          nama: p.nama,
-                          tempat_lahir: p.tempat_lahir,
-                          tanggal_lahir: p.tanggal_lahir,
-                          pekerjaan: p.pekerjaan,
-                          tanggal_menikah: p.tanggal_menikah
-                        });
-                      }}>Edit</button>
-                      <button className="text-action red" onClick={() => handleDeletePasangan(selectedPegawai.pasangan[0].id)}>Hapus</button>
-                    </div>
-                  </div>
-                )}
+                <div className="form-section-title">
+                  <Icon name="file" size={15} /> Tanggal TMT & Riwayat Pangkat
+                </div>
+                <div className="form-grid">
+                  <Field label="TMT Pangkat / Golongan Efektif" hint="Tanggal SK pangkat/golongan terakhir (MKG dihitung dari tanggal ini)">
+                    <input
+                      className="field-input"
+                      type="date"
+                      value={dateOnly(formPegawai.tmt_pangkat)}
+                      onChange={e => updatePegawai('tmt_pangkat', e.target.value)}
+                    />
+                  </Field>
 
-                {(isAddingPasangan || editingPasangan) && (
-                  <form onSubmit={handleSavePasangan} className="inline-form">
-                    <Field label="Nama">
-                      <input className="field-input" value={formPasangan.nama || ''} onChange={e => setFormPasangan({ ...formPasangan, nama: e.target.value })} required />
-                    </Field>
-                    <Field label="Tempat lahir">
-                      <input className="field-input" value={formPasangan.tempat_lahir || ''} onChange={e => setFormPasangan({ ...formPasangan, tempat_lahir: e.target.value })} />
-                    </Field>
-                    <Field label="Tanggal lahir">
-                      <input className="field-input" type="date" value={dateOnly(formPasangan.tanggal_lahir)} onChange={e => setFormPasangan({ ...formPasangan, tanggal_lahir: e.target.value })} />
-                    </Field>
-                    <Field label="Pekerjaan">
-                      <input className="field-input" value={formPasangan.pekerjaan || ''} onChange={e => setFormPasangan({ ...formPasangan, pekerjaan: e.target.value })} />
-                    </Field>
-                    <Field label="Tanggal menikah">
-                      <input className="field-input" type="date" value={dateOnly(formPasangan.tanggal_menikah)} onChange={e => setFormPasangan({ ...formPasangan, tanggal_menikah: e.target.value })} />
-                    </Field>
-                    <div className="form-actions">
-                      <button className="btn-teal small" type="submit">Simpan</button>
-                      <button className="btn-ghost small" type="button" onClick={() => { setIsAddingPasangan(false); setEditingPasangan(false); }}>Batal</button>
-                    </div>
-                  </form>
-                )}
-              </div>
+                  <Field label="TMT CPNS / Pengangkatan Pertama" hint="Tanggal awal CPNS/PNS (fallback jika belum naik pangkat)">
+                    <input
+                      className="field-input"
+                      type="date"
+                      value={dateOnly(formPegawai.tmt_cpns)}
+                      onChange={e => updatePegawai('tmt_cpns', e.target.value)}
+                    />
+                  </Field>
 
-              <div className="subsection">
-                <div className="subsection-head">
+                  <Field label="Offset MKG (Potongan Lintas Golongan)" hint="Aturan BKN: -6 jika pindah I→II, -5 jika II→III (Tahun)">
+                    <input
+                      className="field-input"
+                      type="number"
+                      step="1"
+                      min="-15"
+                      max="10"
+                      value={formPegawai.mkg_offset ?? 0}
+                      onChange={e => updatePegawai('mkg_offset', e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="0"
+                    />
+                  </Field>
+
+                  <Field label="TMT KGB Terakhir" hint="Tanggal SK KGB terakhir">
+                    <input
+                      className="field-input"
+                      type="date"
+                      value={dateOnly(formPegawai.tmt_kgb_terakhir)}
+                      onChange={e => updatePegawai('tmt_kgb_terakhir', e.target.value)}
+                    />
+                  </Field>
+                </div>
+
+                <div className="form-section-title">
+                  <Icon name="clock" size={15} /> Masa Kerja Golongan (MKG)
+                </div>
+
+                <div style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: '12px', padding: '12px 16px', marginBottom: '14px', fontSize: '0.82rem', color: '#0369A1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                   <div>
-                    <h3>Anak <span className="count-badge">{selectedPegawai.anak?.length || 0}</span></h3>
-                    <p>Daftar tanggungan keluarga.</p>
+                    <strong>Kalkulasi MKG Otomatis: </strong>
+                    <span style={{ fontWeight: 700, color: '#0284C7' }}>
+                      {hitungMKGClient(formPegawai.tmt_pangkat, formPegawai.tmt_cpns, formPegawai.mkg_offset).tahun} Tahun {hitungMKGClient(formPegawai.tmt_pangkat, formPegawai.tmt_cpns, formPegawai.mkg_offset).bulan} Bulan
+                    </span>
+                    <span style={{ marginLeft: '8px', color: '#64748B', fontSize: '0.75rem' }}>
+                      (Acuan: {hitungMKGClient(formPegawai.tmt_pangkat, formPegawai.tmt_cpns, formPegawai.mkg_offset).sumber}
+                      {Number(formPegawai.mkg_offset) ? `, offset: ${formPegawai.mkg_offset} thn` : ''})
+                    </span>
                   </div>
-                  <button className="btn-ghost small" onClick={() => { setIsAddingAnak(true); setEditingAnakId(null); setFormAnak({ status_anak: 'Kandung' }); }}>
-                    <Icon name="plus" size={14} /> Tambah
+                  <button
+                    type="button"
+                    className="btn-helper-calc"
+                    style={{ padding: '6px 12px', fontSize: '0.72rem' }}
+                    onClick={handleSyncMkgDariTmt}
+                  >
+                    Sinkronkan ke Form
                   </button>
                 </div>
 
-                {selectedPegawai.anak?.length ? (
-                  <div className="children-list">
-                    {selectedPegawai.anak.map((a, i) => editingAnakId === a.id ? (
-                      <form key={a.id} onSubmit={handleSaveAnak} className="child-edit inline-form">
-                        <Field label="Nama">
-                          <input className="field-input" value={formAnak.nama || ''} onChange={e => setFormAnak({ ...formAnak, nama: e.target.value })} required />
-                        </Field>
-                        <Field label="Tempat lahir">
-                          <input className="field-input" value={formAnak.tempat_lahir || ''} onChange={e => setFormAnak({ ...formAnak, tempat_lahir: e.target.value })} />
-                        </Field>
-                        <Field label="Tanggal lahir">
-                          <input className="field-input" type="date" value={dateOnly(formAnak.tanggal_lahir)} onChange={e => setFormAnak({ ...formAnak, tanggal_lahir: e.target.value })} required />
-                        </Field>
-                        <Field label="Status anak">
-                          <select className="field-input" value={formAnak.status_anak || 'Kandung'} onChange={e => setFormAnak({ ...formAnak, status_anak: e.target.value })}>
-                            <option value="Kandung">Kandung</option>
-                            <option value="Tiri">Tiri</option>
-                            <option value="Angkat">Angkat</option>
-                          </select>
-                        </Field>
-                        <Field label="Pendidikan">
-                          <input className="field-input" value={formAnak.status_pendidikan || ''} onChange={e => setFormAnak({ ...formAnak, status_pendidikan: e.target.value })} placeholder="SMA / Kuliah" />
-                        </Field>
-                        <div className="form-actions">
-                          <button className="btn-teal small" type="submit">Simpan</button>
-                          <button type="button" className="btn-ghost small" onClick={() => setEditingAnakId(null)}>Batal</button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="child-row" key={a.id}>
-                        <span className="child-number">0{i + 1}</span>
-                        <div>
-                          <strong>{a.nama}</strong>
-                          <span>
-                            {a.status_anak || 'Kandung'} · {a.tempat_lahir ? `${a.tempat_lahir}, ` : ''}{prettyDate(a.tanggal_lahir)} · {a.status_pendidikan || 'Pendidikan belum diisi'}
-                          </span>
-                        </div>
-                        <div className="row-actions">
-                          <button className="icon-action" onClick={() => {
-                            setEditingAnakId(a.id);
-                            setIsAddingAnak(false);
-                            setFormAnak({
-                              id: a.id,
-                              nama: a.nama,
-                              tempat_lahir: a.tempat_lahir,
-                              tanggal_lahir: a.tanggal_lahir,
-                              status_anak: a.status_anak || 'Kandung',
-                              status_pendidikan: a.status_pendidikan
-                            });
-                          }}>
-                            <Icon name="edit" size={15} />
-                          </button>
-                          <button className="icon-action danger" onClick={() => handleDeleteAnak(a.id)}>
-                            <Icon name="trash" size={15} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState text="Belum ada data anak." />
-                )}
+                <div className="form-grid">
+                  <Field label="Masa Kerja Golongan (Tahun)" hint="Otomatis dari TMT atau ubah manual (0–40)">
+                    <input
+                      className="field-input"
+                      type="number"
+                      min="0"
+                      max="40"
+                      value={formPegawai.mkg_tahun ?? ''}
+                      onChange={handleMkgTahunChange}
+                      required
+                    />
+                  </Field>
+                  <Field label="Masa Kerja Golongan (Bulan)" hint="Otomatis dari TMT atau ubah manual (0–11)">
+                    <input
+                      className="field-input"
+                      type="number"
+                      min="0"
+                      max="11"
+                      value={formPegawai.mkg_bulan ?? ''}
+                      onChange={e => updatePegawai('mkg_bulan', e.target.value === '' ? '' : Number(e.target.value))}
+                    />
+                  </Field>
+                </div>
 
-                {isAddingAnak && (
-                  <form onSubmit={handleSaveAnak} className="inline-form">
-                    <Field label="Nama">
-                      <input className="field-input" value={formAnak.nama || ''} onChange={e => setFormAnak({ ...formAnak, nama: e.target.value })} required />
-                    </Field>
-                    <Field label="Tempat lahir">
-                      <input className="field-input" value={formAnak.tempat_lahir || ''} onChange={e => setFormAnak({ ...formAnak, tempat_lahir: e.target.value })} />
-                    </Field>
-                    <Field label="Tanggal lahir">
-                      <input className="field-input" type="date" value={dateOnly(formAnak.tanggal_lahir)} onChange={e => setFormAnak({ ...formAnak, tanggal_lahir: e.target.value })} required />
-                    </Field>
-                    <Field label="Status anak">
-                      <select className="field-input" value={formAnak.status_anak || 'Kandung'} onChange={e => setFormAnak({ ...formAnak, status_anak: e.target.value })}>
-                        <option value="Kandung">Kandung</option>
-                        <option value="Tiri">Tiri</option>
-                        <option value="Angkat">Angkat</option>
-                      </select>
-                    </Field>
-                    <Field label="Status pendidikan">
-                      <input className="field-input" value={formAnak.status_pendidikan || ''} onChange={e => setFormAnak({ ...formAnak, status_pendidikan: e.target.value })} placeholder="SMA / Kuliah" />
-                    </Field>
-                    <div className="form-actions">
-                      <button className="btn-teal small" type="submit">Simpan</button>
-                      <button type="button" className="btn-ghost small" onClick={() => setIsAddingAnak(false)}>Batal</button>
+                <div className="form-section-title">
+                  <Icon name="shield" size={15} /> Status & Penetapan Gaji Pokok
+                </div>
+
+                <div className="form-grid">
+                  <Field label="Status KGB" style={{ gridColumn: 'span 2' }}>
+                    <select className="field-input" value={formPegawai.status_kgb || 'Normal'} onChange={e => updatePegawai('status_kgb', e.target.value)}>
+                      <option value="Normal">Normal</option>
+                      <option value="Waktunya KGB">Waktunya KGB (Perlu Kenaikan {persenSetting}%)</option>
+                    </select>
+                  </Field>
+
+                  <Field label="Gaji Pokok (Rp)" hint="Bisa diinput manual atau dihitung otomatis" style={{ gridColumn: 'span 2' }}>
+                    <div className="salary-input-wrap">
+                      <input
+                        className="field-input"
+                        type="number"
+                        value={formPegawai.gaji_pokok || ''}
+                        onChange={e => {
+                          updatePegawai('gaji_pokok', e.target.value);
+                          updatePegawai('_manualGaji', true);
+                        }}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="btn-helper-calc"
+                        onClick={handleHitungOtomatisGaji}
+                        title={`Hitung otomatis berdasarkan acuan 2024 dengan kenaikan ${persenSetting}% per 2 tahun masa kerja`}
+                      >
+                        Hitung {persenSetting}%
+                      </button>
                     </div>
-                  </form>
-                )}
+                  </Field>
+                </div>
+
+                <div className="form-actions" style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+                  <button className="btn-primary" type="submit"><Icon name="check" size={16} /> Simpan Pembaruan Profil</button>
+                </div>
+              </form>
+
+              {/* Data Keluarga (Pasangan & Anak) */}
+              <div className="family-management">
+                <div className="subsection">
+                  <div className="subsection-head">
+                    <div>
+                      <h3>Pasangan</h3>
+                      <p>{selectedPegawai.pasangan?.length ? 'Informasi pasangan pegawai.' : 'Belum ada informasi pasangan.'}</p>
+                    </div>
+                    {!selectedPegawai.pasangan?.length && !isAddingPasangan && (
+                      <button className="btn-ghost small" onClick={() => { setIsAddingPasangan(true); setFormPasangan({}); }}>
+                        <Icon name="plus" size={14} /> Tambah
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedPegawai.pasangan?.length > 0 && !editingPasangan && !isAddingPasangan && (
+                    <div className="family-record">
+                      <div>
+                        <strong>{selectedPegawai.pasangan[0].nama}</strong>
+                        <span>
+                          {selectedPegawai.pasangan[0].pekerjaan || 'Pekerjaan belum diisi'} · {selectedPegawai.pasangan[0].tempat_lahir ? `${selectedPegawai.pasangan[0].tempat_lahir}, ` : ''}{prettyDate(selectedPegawai.pasangan[0].tanggal_lahir)}
+                        </span>
+                      </div>
+                      <div>
+                        <button className="text-action" onClick={() => {
+                          const p = selectedPegawai.pasangan[0];
+                          setEditingPasangan(true);
+                          setFormPasangan({
+                            id: p.id,
+                            nama: p.nama,
+                            tempat_lahir: p.tempat_lahir,
+                            tanggal_lahir: p.tanggal_lahir,
+                            pekerjaan: p.pekerjaan,
+                            tanggal_menikah: p.tanggal_menikah
+                          });
+                        }}>Edit</button>
+                        <button className="text-action red" onClick={() => handleDeletePasangan(selectedPegawai.pasangan[0].id)}>Hapus</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {(isAddingPasangan || editingPasangan) && (
+                    <form onSubmit={handleSavePasangan} className="inline-form">
+                      <Field label="Nama">
+                        <input className="field-input" value={formPasangan.nama || ''} onChange={e => setFormPasangan({ ...formPasangan, nama: e.target.value })} required />
+                      </Field>
+                      <Field label="Tempat lahir">
+                        <input className="field-input" value={formPasangan.tempat_lahir || ''} onChange={e => setFormPasangan({ ...formPasangan, tempat_lahir: e.target.value })} />
+                      </Field>
+                      <Field label="Tanggal lahir">
+                        <input className="field-input" type="date" value={dateOnly(formPasangan.tanggal_lahir)} onChange={e => setFormPasangan({ ...formPasangan, tanggal_lahir: e.target.value })} />
+                      </Field>
+                      <Field label="Pekerjaan">
+                        <input className="field-input" value={formPasangan.pekerjaan || ''} onChange={e => setFormPasangan({ ...formPasangan, pekerjaan: e.target.value })} />
+                      </Field>
+                      <Field label="Tanggal menikah">
+                        <input className="field-input" type="date" value={dateOnly(formPasangan.tanggal_menikah)} onChange={e => setFormPasangan({ ...formPasangan, tanggal_menikah: e.target.value })} />
+                      </Field>
+                      <div className="form-actions">
+                        <button className="btn-teal small" type="submit">Simpan</button>
+                        <button className="btn-ghost small" type="button" onClick={() => { setIsAddingPasangan(false); setEditingPasangan(false); }}>Batal</button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+
+                <div className="subsection">
+                  <div className="subsection-head">
+                    <div>
+                      <h3>Anak <span className="count-badge">{selectedPegawai.anak?.length || 0}</span></h3>
+                      <p>Daftar tanggungan keluarga.</p>
+                    </div>
+                    <button className="btn-ghost small" onClick={() => { setIsAddingAnak(true); setEditingAnakId(null); setFormAnak({ status_anak: 'Kandung' }); }}>
+                      <Icon name="plus" size={14} /> Tambah
+                    </button>
+                  </div>
+
+                  {selectedPegawai.anak?.length ? (
+                    <div className="children-list">
+                      {selectedPegawai.anak.map((a, i) => editingAnakId === a.id ? (
+                        <form key={a.id} onSubmit={handleSaveAnak} className="child-edit inline-form">
+                          <Field label="Nama">
+                            <input className="field-input" value={formAnak.nama || ''} onChange={e => setFormAnak({ ...formAnak, nama: e.target.value })} required />
+                          </Field>
+                          <Field label="Tempat lahir">
+                            <input className="field-input" value={formAnak.tempat_lahir || ''} onChange={e => setFormAnak({ ...formAnak, tempat_lahir: e.target.value })} />
+                          </Field>
+                          <Field label="Tanggal lahir">
+                            <input className="field-input" type="date" value={dateOnly(formAnak.tanggal_lahir)} onChange={e => setFormAnak({ ...formAnak, tanggal_lahir: e.target.value })} required />
+                          </Field>
+                          <Field label="Status anak">
+                            <select className="field-input" value={formAnak.status_anak || 'Kandung'} onChange={e => setFormAnak({ ...formAnak, status_anak: e.target.value })}>
+                              <option value="Kandung">Kandung</option>
+                              <option value="Tiri">Tiri</option>
+                              <option value="Angkat">Angkat</option>
+                            </select>
+                          </Field>
+                          <Field label="Pendidikan">
+                            <input className="field-input" value={formAnak.status_pendidikan || ''} onChange={e => setFormAnak({ ...formAnak, status_pendidikan: e.target.value })} placeholder="SMA / Kuliah" />
+                          </Field>
+                          <div className="form-actions">
+                            <button className="btn-teal small" type="submit">Simpan</button>
+                            <button type="button" className="btn-ghost small" onClick={() => setEditingAnakId(null)}>Batal</button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="child-row" key={a.id}>
+                          <span className="child-number">0{i + 1}</span>
+                          <div>
+                            <strong>{a.nama}</strong>
+                            <span>
+                              {a.status_anak || 'Kandung'} · {a.tempat_lahir ? `${a.tempat_lahir}, ` : ''}{prettyDate(a.tanggal_lahir)} · {a.status_pendidikan || 'Pendidikan belum diisi'}
+                            </span>
+                          </div>
+                          <div className="row-actions">
+                            <button className="icon-action" onClick={() => {
+                              setEditingAnakId(a.id);
+                              setIsAddingAnak(false);
+                              setFormAnak({
+                                id: a.id,
+                                nama: a.nama,
+                                tempat_lahir: a.tempat_lahir,
+                                tanggal_lahir: a.tanggal_lahir,
+                                status_anak: a.status_anak || 'Kandung',
+                                status_pendidikan: a.status_pendidikan
+                              });
+                            }}>
+                              <Icon name="edit" size={15} />
+                            </button>
+                            <button className="icon-action danger" onClick={() => handleDeleteAnak(a.id)}>
+                              <Icon name="trash" size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState text="Belum ada data anak." />
+                  )}
+
+                  {isAddingAnak && (
+                    <form onSubmit={handleSaveAnak} className="inline-form">
+                      <Field label="Nama">
+                        <input className="field-input" value={formAnak.nama || ''} onChange={e => setFormAnak({ ...formAnak, nama: e.target.value })} required />
+                      </Field>
+                      <Field label="Tempat lahir">
+                        <input className="field-input" value={formAnak.tempat_lahir || ''} onChange={e => setFormAnak({ ...formAnak, tempat_lahir: e.target.value })} />
+                      </Field>
+                      <Field label="Tanggal lahir">
+                        <input className="field-input" type="date" value={dateOnly(formAnak.tanggal_lahir)} onChange={e => setFormAnak({ ...formAnak, tanggal_lahir: e.target.value })} required />
+                      </Field>
+                      <Field label="Status anak">
+                        <select className="field-input" value={formAnak.status_anak || 'Kandung'} onChange={e => setFormAnak({ ...formAnak, status_anak: e.target.value })}>
+                          <option value="Kandung">Kandung</option>
+                          <option value="Tiri">Tiri</option>
+                          <option value="Angkat">Angkat</option>
+                        </select>
+                      </Field>
+                      <Field label="Status pendidikan">
+                        <input className="field-input" value={formAnak.status_pendidikan || ''} onChange={e => setFormAnak({ ...formAnak, status_pendidikan: e.target.value })} placeholder="SMA / Kuliah" />
+                      </Field>
+                      <div className="form-actions">
+                        <button className="btn-teal small" type="submit">Simpan</button>
+                        <button type="button" className="btn-ghost small" onClick={() => setIsAddingAnak(false)}>Batal</button>
+                      </div>
+                    </form>
+                  )}
+                </div>
               </div>
             </div>
-          )}
-        </section>
+
+            <div className="modal-footer">
+              <button className="btn-ghost" type="button" onClick={() => { setSelectedPegawai(null); setSelectedNip(null); }}>
+                Tutup Jendela
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

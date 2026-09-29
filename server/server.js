@@ -39,7 +39,7 @@ const PORT = process.env.PORT || 3001;
 
 async function startServer() {
   try {
-    await sequelize.sync();
+    await sequelize.sync({ alter: true });
     
     // Inisialisasi pengaturan persentase KGB (default 3.15%)
     const settingPersen = await Pengaturan.findOne({ where: { kunci: 'persen_kenaikan_kgb' } });
