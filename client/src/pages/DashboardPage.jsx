@@ -143,6 +143,51 @@ function DashboardPage() {
   const [isAddingAnak, setIsAddingAnak] = useState(false);
   const [editingAnakId, setEditingAnakId] = useState(null);
 
+  // Data keluarga saat registrasi pegawai baru
+  const [hasNewPasangan, setHasNewPasangan] = useState(false);
+  const [newPasangan, setNewPasangan] = useState({
+    nama: '',
+    tempat_lahir: '',
+    tanggal_lahir: '',
+    pekerjaan: '',
+    tanggal_menikah: ''
+  });
+
+  const [hasNewAnak, setHasNewAnak] = useState(false);
+  const [newAnakList, setNewAnakList] = useState([]);
+
+  const handleAddNewAnakRow = () => {
+    setNewAnakList(prev => [
+      ...prev,
+      {
+        nama: '',
+        tempat_lahir: '',
+        tanggal_lahir: '',
+        status_anak: 'Kandung',
+        status_pendidikan: ''
+      }
+    ]);
+  };
+
+  const handleUpdateNewAnak = (index, field, value) => {
+    setNewAnakList(prev => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const handleRemoveNewAnakRow = (index) => {
+    setNewAnakList(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const toggleHasNewAnak = (checked) => {
+    setHasNewAnak(checked);
+    if (checked && newAnakList.length === 0) {
+      handleAddNewAnakRow();
+    }
+  };
+
   useEffect(() => {
     fetchPegawaiList();
     fetchKgbEligible();
@@ -337,8 +382,53 @@ function DashboardPage() {
 
       if (isAdding) {
         await api.post('/admin/pegawai', payload);
-        window.alert('Pegawai berhasil ditambahkan');
+        const createdNip = payload.nip;
+
+        // Simpan data Pasangan jika diaktifkan dan nama terisi
+        if (hasNewPasangan && newPasangan.nama?.trim()) {
+          try {
+            await api.post('/admin/pasangan', {
+              ...newPasangan,
+              nip: createdNip,
+              tempat_lahir: newPasangan.tempat_lahir || null,
+              tanggal_lahir: newPasangan.tanggal_lahir || null,
+              pekerjaan: newPasangan.pekerjaan || null,
+              tanggal_menikah: newPasangan.tanggal_menikah || null
+            });
+          } catch (errPasangan) {
+            console.error('Gagal menyimpan pasangan baru:', errPasangan);
+          }
+        }
+
+        // Simpan data Anak jika diaktifkan dan ada anak yang terisi namanya
+        if (hasNewAnak && newAnakList.length > 0) {
+          for (const anak of newAnakList) {
+            if (anak.nama?.trim()) {
+              try {
+                await api.post('/admin/anak', {
+                  ...anak,
+                  nip: createdNip,
+                  tempat_lahir: anak.tempat_lahir || null,
+                  tanggal_lahir: anak.tanggal_lahir || null,
+                  status_anak: anak.status_anak || 'Kandung',
+                  status_pendidikan: anak.status_pendidikan || null
+                });
+              } catch (errAnak) {
+                console.error('Gagal menyimpan anak baru:', errAnak);
+              }
+            }
+          }
+        }
+
+        const msgKeluarga = (hasNewPasangan && newPasangan.nama?.trim()) || (hasNewAnak && newAnakList.some(a => a.nama?.trim()))
+          ? 'Pegawai dan data keluarga berhasil ditambahkan!'
+          : 'Pegawai berhasil ditambahkan!';
+        window.alert(msgKeluarga);
         setIsAdding(false);
+        setHasNewPasangan(false);
+        setNewPasangan({ nama: '', tempat_lahir: '', tanggal_lahir: '', pekerjaan: '', tanggal_menikah: '' });
+        setHasNewAnak(false);
+        setNewAnakList([]);
       } else {
         await api.put(`/admin/pegawai/${payload.nip}`, payload);
         window.alert('Data pegawai berhasil diperbarui');
@@ -542,7 +632,17 @@ function DashboardPage() {
                   <Icon name="search" size={16} />
                   <input placeholder="Cari nama, NIP, atau golongan…" value={query} onChange={e => setQuery(e.target.value)} />
                 </div>
-                <button className="btn-primary" onClick={() => { setActiveTab('direktori'); setIsAdding(true); setSelectedPegawai(null); setSelectedNip(null); setFormPegawai({ mkg_tahun: 0, mkg_bulan: 0, mkg_offset: 0, tmt_pangkat: '', tmt_cpns: '', status_kgb: 'Normal' }); }}>
+                <button className="btn-primary" onClick={() => { 
+                  setActiveTab('direktori'); 
+                  setIsAdding(true); 
+                  setSelectedPegawai(null); 
+                  setSelectedNip(null); 
+                  setFormPegawai({ mkg_tahun: 0, mkg_bulan: 0, mkg_offset: 0, tmt_pangkat: '', tmt_cpns: '', status_kgb: 'Normal' });
+                  setHasNewPasangan(false);
+                  setNewPasangan({ nama: '', tempat_lahir: '', tanggal_lahir: '', pekerjaan: '', tanggal_menikah: '' });
+                  setHasNewAnak(false);
+                  setNewAnakList([]);
+                }}>
                   <Icon name="plus" size={17} /> Pegawai baru
                 </button>
               </div>
@@ -1043,6 +1143,173 @@ function DashboardPage() {
                       </button>
                     </div>
                   </Field>
+                </div>
+
+                {/* DATA KELUARGA (OPSIONAL): PASANGAN & ANAK */}
+                <div className="form-section-title" style={{ marginTop: '24px' }}>
+                  <Icon name="heart" size={15} /> Data Keluarga (Opsional untuk Penunjang Tunjangan KP4)
+                </div>
+
+                {/* PILIHAN PASANGAN */}
+                <div style={{ background: hasNewPasangan ? '#F0FDF4' : '#F8FAFC', border: `1.5px solid ${hasNewPasangan ? '#86EFAC' : '#E2E8F0'}`, borderRadius: '14px', padding: '16px 18px', marginBottom: '14px', transition: 'all 0.2s ease' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.88rem', color: '#0F172A', margin: 0, userSelect: 'none' }}>
+                      <input
+                        type="checkbox"
+                        checked={hasNewPasangan}
+                        onChange={e => setHasNewPasangan(e.target.checked)}
+                        style={{ width: '18px', height: '18px', accentColor: '#0284C7', cursor: 'pointer' }}
+                      />
+                      <span>💍 Sudah Memiliki Pasangan (Suami/Istri)</span>
+                    </label>
+                    <span style={{ fontSize: '0.74rem', color: hasNewPasangan ? '#059669' : '#64748B', fontWeight: hasNewPasangan ? 700 : 500 }}>
+                      {hasNewPasangan ? '✓ Tunjangan 10% dihitung' : 'Centang jika ingin langsung didaftarkan'}
+                    </span>
+                  </div>
+
+                  {hasNewPasangan && (
+                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed #CBD5E1' }}>
+                      <div className="form-grid">
+                        <Field label="Nama Pasangan" hint="Nama lengkap suami/istri">
+                          <input
+                            className="field-input"
+                            value={newPasangan.nama || ''}
+                            onChange={e => setNewPasangan({ ...newPasangan, nama: e.target.value })}
+                            placeholder="Contoh: Siti Aminah"
+                            required={hasNewPasangan}
+                          />
+                        </Field>
+                        <Field label="Pekerjaan / NIP" hint="Pekerjaan atau NIP jika sesama PNS">
+                          <input
+                            className="field-input"
+                            value={newPasangan.pekerjaan || ''}
+                            onChange={e => setNewPasangan({ ...newPasangan, pekerjaan: e.target.value })}
+                            placeholder="Contoh: PNS / Wiraswasta / Ibu Rumah Tangga"
+                          />
+                        </Field>
+                        <Field label="Tempat Lahir Pasangan">
+                          <input
+                            className="field-input"
+                            value={newPasangan.tempat_lahir || ''}
+                            onChange={e => setNewPasangan({ ...newPasangan, tempat_lahir: e.target.value })}
+                            placeholder="Contoh: Palu"
+                          />
+                        </Field>
+                        <Field label="Tanggal Lahir Pasangan">
+                          <input
+                            className="field-input"
+                            type="date"
+                            value={dateOnly(newPasangan.tanggal_lahir)}
+                            onChange={e => setNewPasangan({ ...newPasangan, tanggal_lahir: e.target.value })}
+                          />
+                        </Field>
+                        <Field label="Tanggal Pernikahan" style={{ gridColumn: 'span 2' }}>
+                          <input
+                            className="field-input"
+                            type="date"
+                            value={dateOnly(newPasangan.tanggal_menikah)}
+                            onChange={e => setNewPasangan({ ...newPasangan, tanggal_menikah: e.target.value })}
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* PILIHAN ANAK */}
+                <div style={{ background: hasNewAnak ? '#F0FDF4' : '#F8FAFC', border: `1.5px solid ${hasNewAnak ? '#86EFAC' : '#E2E8F0'}`, borderRadius: '14px', padding: '16px 18px', marginBottom: '14px', transition: 'all 0.2s ease' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.88rem', color: '#0F172A', margin: 0, userSelect: 'none' }}>
+                      <input
+                        type="checkbox"
+                        checked={hasNewAnak}
+                        onChange={e => toggleHasNewAnak(e.target.checked)}
+                        style={{ width: '18px', height: '18px', accentColor: '#0284C7', cursor: 'pointer' }}
+                      />
+                      <span>👶 Memiliki Tanggungan Anak ({newAnakList.length})</span>
+                    </label>
+                    <span style={{ fontSize: '0.74rem', color: hasNewAnak ? '#059669' : '#64748B', fontWeight: hasNewAnak ? 700 : 500 }}>
+                      {hasNewAnak ? '✓ Tunjangan 2% per anak (maks 2)' : 'Centang jika memiliki anak'}
+                    </span>
+                  </div>
+
+                  {hasNewAnak && (
+                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed #CBD5E1' }}>
+                      {newAnakList.map((anak, idx) => (
+                        <div key={idx} style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '14px 16px', marginBottom: '14px', position: 'relative', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <span style={{ fontWeight: 800, fontSize: '0.82rem', color: '#0369A1' }}>
+                              Anak Ke-{idx + 1}
+                            </span>
+                            {newAnakList.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveNewAnakRow(idx)}
+                                style={{ background: '#FEE2E2', border: 'none', borderRadius: '6px', color: '#DC2626', fontSize: '0.75rem', fontWeight: 700, padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                              >
+                                <Icon name="trash" size={13} /> Hapus Baris
+                              </button>
+                            )}
+                          </div>
+                          <div className="form-grid">
+                            <Field label="Nama Anak" hint="Nama lengkap anak">
+                              <input
+                                className="field-input"
+                                value={anak.nama || ''}
+                                onChange={e => handleUpdateNewAnak(idx, 'nama', e.target.value)}
+                                placeholder="Contoh: Ahmad Fauzan"
+                                required={hasNewAnak}
+                              />
+                            </Field>
+                            <Field label="Status Hubungan">
+                              <select
+                                className="field-input"
+                                value={anak.status_anak || 'Kandung'}
+                                onChange={e => handleUpdateNewAnak(idx, 'status_anak', e.target.value)}
+                              >
+                                <option value="Kandung">Kandung</option>
+                                <option value="Tiri">Tiri</option>
+                                <option value="Angkat">Angkat</option>
+                              </select>
+                            </Field>
+                            <Field label="Tempat Lahir">
+                              <input
+                                className="field-input"
+                                value={anak.tempat_lahir || ''}
+                                onChange={e => handleUpdateNewAnak(idx, 'tempat_lahir', e.target.value)}
+                                placeholder="Contoh: Palu"
+                              />
+                            </Field>
+                            <Field label="Tanggal Lahir">
+                              <input
+                                className="field-input"
+                                type="date"
+                                value={dateOnly(anak.tanggal_lahir)}
+                                onChange={e => handleUpdateNewAnak(idx, 'tanggal_lahir', e.target.value)}
+                              />
+                            </Field>
+                            <Field label="Status Pendidikan" style={{ gridColumn: 'span 2' }}>
+                              <input
+                                className="field-input"
+                                value={anak.status_pendidikan || ''}
+                                onChange={e => handleUpdateNewAnak(idx, 'status_pendidikan', e.target.value)}
+                                placeholder="Contoh: Belum Sekolah / SD / SMP / SMA / Kuliah"
+                              />
+                            </Field>
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        type="button"
+                        className="btn-ghost small"
+                        onClick={handleAddNewAnakRow}
+                        style={{ width: '100%', justifyContent: 'center', border: '1.5px dashed #CBD5E1', padding: '10px', borderRadius: '10px', background: '#F8FAFC', fontWeight: 700 }}
+                      >
+                        <Icon name="plus" size={14} /> + Tambah Anak Lainnya
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
