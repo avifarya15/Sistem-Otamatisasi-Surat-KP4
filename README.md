@@ -29,9 +29,9 @@ Dilengkapi dengan portal publik untuk pegawai melakukan pengecekan data mandiri 
 
 ### 1. 🌐 Portal Publik (Layanan Mandiri Pegawai)
 - **Verifikasi Cepat & Presisi:** Validasi identitas pegawai menggunakan kombinasi aman **NIP (18 Digit)** dan **Tanggal Lahir**.
-- **Penyesuaian Interaktif Masa Kerja (MKG):** Pegawai dapat menyesuaikan masa kerja golongan (tahun & bulan) dengan pembaruan kalkulasi gaji pokok seketika dan opsi simpan langsung ke database.
+- **Kalkulasi MKG Otomatis dari TMT:** Masa Kerja Golongan (MKG) dihitung otomatis secara presisi dari **TMT Pangkat** atau **TMT CPNS** sesuai regulasi BKN, dengan opsi penyesuaian mandiri dan sinkronisasi instan ke database.
 - **Kalkulasi Tunjangan Keluarga Otomatis:**
-  - **Gaji Pokok:** Dihitung otomatis berdasarkan golongan ruang (I/a s.d IV/e dan IX) dan masa kerja (PP No. 5/2024).
+  - **Gaji Pokok:** Lookup resmi dari tabel **PP No. 5 Tahun 2024** untuk seluruh golongan (I/a s.d IV/e dan IX) serta MKG (0–33 tahun).
   - **Tunjangan Pasangan:** 10% dari gaji pokok (maksimal 1 pasangan sah).
   - **Tunjangan Anak:** 2% dari gaji pokok per anak (maksimal 2 anak tanggungan).
   - **Penghasilan Bruto:** Total komputasi gaji pokok ditambah seluruh tunjangan keluarga.
@@ -40,26 +40,30 @@ Dilengkapi dengan portal publik untuk pegawai melakukan pengecekan data mandiri 
 
 ### 2. 🛡️ Portal Administrator (Workspace Pengelola Kepegawaian)
 - **Sistem Autentikasi Terproteksi:** Login admin berbasis token JWT (*JSON Web Token*) dengan enkripsi password *bcrypt*.
-- **Metrik & Ringkasan Data:** Indikator total pegawai terdaftar dan notifikasi pegawai yang memasuki periode KGB.
-- **Direktori & Pencarian Cepat:** Pencarian instan multifilter berdasarkan Nama, NIP, atau Unit Kerja.
-- **Manajemen Pegawai (CRUD):** Tambah pegawai baru, ubah rincian kepegawaian (NIP, nama, TTL, golongan, jabatan, unit kerja, gaji pokok, TMT CPNS, TMT KGB, MKG), dan hapus data.
-- **Aksi Tabel Terstruktur & Ergonomis:** Penataan tombol aksi pada baris tabel pegawai (tombol "Buka" dan ikon "Hapus") dengan grup aksi terstruktur (`action-group`) yang rapi, berjarak optimal, dan nyaman digunakan untuk meminimalkan risiko salah tekan.
-- **Kalkulasi Otomatis Saat Input:** Bila gaji pokok dikosongkan saat input pegawai, sistem mengkalkulasi nominal awal otomatis sesuai golongan dan masa kerja.
-- **Manajemen Data Pasangan:** Tambah, edit, dan hapus pasangan pegawai (nama, TTL, pekerjaan/NIP, tanggal pernikahan).
-- **Manajemen Tanggungan Anak:** Tambah, edit, dan hapus data anak (nama, TTL, status anak: *Kandung / Tiri / Angkat*, dan status pendidikan).
+- **Modal Window "Lihat Profil Pegawai":** Peninjauan profil pegawai dan data keluarga kini tampil dalam jendela modal pop-up fokus (*overlay dialog*) tanpa mengharuskan admin menggulir (*scroll*) jauh ke bawah tabel. Dilengkapi navigasi tab (Data Diri, Pasangan, Anak, Finansial), aksi cetak langsung, serta dukungan penutupan dengan tombol `Esc` atau klik di luar modal.
+- **Direktori Pegawai Berpaginasi:** Tabel direktori pegawai dilengkapi kontrol paginasi fleksibel (10, 25, 50 entri per halaman) serta pencarian instan multifilter (Nama, NIP, Unit Kerja).
+- **Manajemen Pegawai (CRUD):** Tambah pegawai baru, ubah rincian kepegawaian (NIP, nama, TTL, golongan, jabatan, unit kerja, gaji pokok, TMT CPNS, TMT KGB, TMT Pangkat, MKG Offset), dan hapus data.
+- **Aksi Tabel Terstruktur & Ergonomis:** Penataan tombol aksi pada baris tabel pegawai (tombol "Buka" profil dan ikon "Hapus") dengan grup aksi terstruktur (`action-group`) yang rapi dan nyaman digunakan.
+- **Kalkulasi Otomatis Saat Input:** Bila gaji pokok dikosongkan saat input pegawai, sistem mengkalkulasi nominal awal otomatis sesuai golongan dan masa kerja berdasar tabel PP No. 5/2024.
+- **Manajemen Data Pasangan:** Tambah, edit, dan hapus pasangan pegawai (nama, TTL, pekerjaan/NIP, tanggal pernikahan) langsung di modal profil atau workspace.
+- **Manajemen Tanggungan Anak:** Tambah, edit, dan hapus data anak (nama, TTL, status anak: *Kandung / Tiri / Angkat*, status pendidikan).
 - **Integritas Data Cascading:** Penghapusan data pegawai otomatis membersihkan seluruh riwayat pasangan dan anak terkait.
 
-### 3. ⚡ Otomasi Kenaikan Gaji Berkala (KGB)
+### 3. 🧮 Otomasi Kalkulasi MKG & Kenaikan Gaji Berkala (KGB)
+- **Kalkulasi MKG Berbasis Aturan Resmi BKN:**
+  - **Kenaikan Pangkat Satu Rumpun (misal III/a → III/b):** MKG pada golongan baru kembali dimulai dari **0 tahun 0 bulan**, dihitung dari `tmt_pangkat`.
+  - **Kenaikan Pangkat Lintas Golongan Utama (misal II/d → III/a):** Masa kerja disesuaikan/dipotong via parameter `mkg_offset` (contoh: Gol I ke II dipotong 6 tahun, Gol II ke III dipotong 5 tahun).
+  - **Pegawai Baru:** Menggunakan `tmt_cpns` sebagai dasar awal perhitungan masa kerja golongan.
 - **Deteksi Otomatis Kelayakan KGB:** Sistem memindai pegawai yang telah memenuhi siklus 2 tahun (24 bulan) masa kerja berdasarkan selisih `tmt_kgb_terakhir` dengan tanggal berjalan atau berstatus `'Waktunya KGB'`.
 - **Eksekusi 1-Klik:** Memproses kenaikan pangkat/gaji secara instan:
   - Menambah Masa Kerja Golongan (`mkg_tahun`) sebanyak **+2 Tahun**.
-  - Mengkalkulasi penyesuaian gaji pokok baru sesuai tabel acuan dan rasio kenaikan persentase.
+  - Menyesuaikan gaji pokok baru sesuai tabel acuan PP 5/2024 dan rasio kenaikan persentase.
   - Memperbarui `tmt_kgb_terakhir` ke tanggal hari ini dan mereset status ke `'Normal'`.
   - Menghitung ulang proyeksi kenaikan tunjangan keluarga.
 
 ### 4. ⚙️ Pengaturan Parameter Dinamis
 - **Konfigurasi Persentase Kenaikan KGB:** Administrator dapat menyesuaikan nilai persentase kenaikan gaji berkala (standar: 3,15%) yang tersimpan persisten pada tabel pengaturan sistem tanpa mengubah kode program.
-- **Konfigurasi Pejabat Penandatangan KP4 (Kepala Sub Bagian):** Administrator dapat mengubah data pejabat penandatangan naskah dinas KP4 (Nama Lengkap, Pangkat/Golongan, dan NIP Kepala Sub Bagian Kepegawaian dan Umum) secara dinamis dari dashboard admin, dilengkapi dengan *live visual preview* blok tanda tangan. Fitur ini mengantisipasi pergantian pejabat tanpa perlu perubahan kode sumber program.
+- **Konfigurasi Pejabat Penandatangan KP4 (Kepala Sub Bagian):** Administrator dapat mengubah data pejabat penandatangan naskah dinas KP4 (Nama Lengkap, Pangkat/Golongan, dan NIP Kepala Sub Bagian Kepegawaian dan Umum) secara dinamis dari dashboard admin, dilengkapi dengan *live visual preview* blok tanda tangan.
 
 ### 5. 📜 Audit Trail & Log Aktivitas
 - **Perekaman Otomatis:** Setiap mutasi data (tambah, ubah, hapus pegawai/pasangan/anak, proses KGB, dan perubahan konfigurasi sistem/pejabat) otomatis terekam ke basis data.
@@ -76,14 +80,36 @@ Dilengkapi dengan portal publik untuk pegawai melakukan pengecekan data mandiri 
 
 ---
 
+## 📋 Data yang Dibutuhkan Sistem (Data Requirements)
+
+Berdasarkan analisis file data kepegawaian instansi (`DATA ASN SEPTEMBER 2026.xlsx`), berikut perbandingan antara data yang sudah tersedia dengan data yang masih harus dilengkapi agar sistem KP4 dan otomasi berjalan sempurna:
+
+| Kategori Data | Sudah Tersedia di Excel ASN | Status di Sistem | Keterangan & Tindak Lanjut |
+| :--- | :---: | :---: | :--- |
+| **NIP (18 Digit)** | ✅ Ya | Wajib (*Primary Key*) | Kunci identitas unik pegawai. |
+| **Nama Lengkap & Gelar** | ✅ Ya | Wajib | Ditampilkan pada dokumen KP4 dan portal. |
+| **Pangkat / Golongan Ruang** | ✅ Ya | Wajib | Acuan lookup gaji pokok pada tabel PP 5/2024. |
+| **Jabatan & Unit Kerja (OPD)** | ✅ Ya | Wajib | Ditampilkan pada formulir naskah dinas KP4. |
+| **Gaji Pokok Awal** | ✅ Ya | Terisi Otomatis | Dihitung otomatis sesuai tabel jika tidak diisi manual. |
+| **Tanggal Lahir** | ❌ Belum Ada | **Wajib Dilengkapi** | **Kritis:** Digunakan sebagai kunci verifikasi login pegawai pada portal publik mandiri. |
+| **Tempat Lahir** | ❌ Belum Ada | **Perlu Dilengkapi** | Wajib dicantumkan pada Bagian I formulir KP4 resmi kedinasan. |
+| **TMT Pangkat Terakhir** | ❌ Belum Ada | **Sangat Disarankan** | Titik acuan perhitungan otomatis MKG berjalan (aturan BKN: reset ke 0 pada kenaikan pangkat baru). |
+| **TMT CPNS (Pengangkatan)** | ❌ Belum Ada | **Disarankan** | Menghitung total masa kerja pengabdian atau fallback MKG pegawai baru. |
+| **TMT KGB Terakhir** | ❌ Belum Ada | **Perlu Dilengkapi** | Menjadi penentu otomatis apakah pegawai sudah masuk siklus 2 tahunan KGB (`status_kgb`). |
+| **Data Pasangan (Suami/Istri)** | ❌ Belum Ada | Opsional (Sesuai Kondisi) | Nama, TTL, Tanggal Menikah, NIP/Pekerjaan untuk penentuan tunjangan keluarga 10%. |
+| **Data Tanggungan Anak** | ❌ Belum Ada | Opsional (Sesuai Kondisi) | Nama, TTL, Status Anak, Status Pendidikan untuk tunjangan keluarga 2% per anak (maks 2). |
+
+---
+
 ## 🛠️ Arsitektur & Teknologi
 
 | Lapisan | Teknologi / Pustaka | Peran & Deskripsi |
 | :--- | :--- | :--- |
-| **Frontend** | React 18, Vite 5, React Router DOM v6, Axios | *Single Page Application* (SPA) dengan performa cepat |
+| **Frontend** | React 18, Vite 5, React Router DOM v6, Axios | *Single Page Application* (SPA) dengan performa kilat |
 | **UI/UX System** | Custom Design System (*Archipelago Civic*), CSS3 | Palet Civic Night, Ivory, Teal, & Terracotta |
 | **Backend API** | Node.js, Express.js 4 | RESTful Web Services & Middleware Architecture |
 | **ORM & Database** | Sequelize ORM v6, SQLite3 | Pemodelan relasional, migrasi skema, & portabilitas data |
+| **Tabel Gaji Resmi** | JSON Database (`tabel_gaji_2024.json`) & XLSX | Database gaji resmi PP No. 5 Tahun 2024 (Gol I–IV, PPPK IX) |
 | **PDF Generation**| PDFKit | Rendering stream dokumen naskah dinas PDF format A4 |
 | **Security & Auth**| JSON Web Token (`jsonwebtoken`), `bcryptjs` | Otentikasi stateless & hashing kata sandi aman |
 | **Environment** | `dotenv`, `cors` | Konfigurasi variabel lingkungan & proteksi lintas domain |
@@ -97,11 +123,12 @@ kp4-system/
 ├── client/                          # Frontend React + Vite
 │   ├── src/
 │   │   ├── api/                     # Konfigurasi Axios & interceptor
-│   │   ├── components/              # Komponen UI (Navbar, Icon, dsb.)
+│   │   ├── components/              # Komponen UI (Navbar, Icon, Modal, dsb.)
+│   │   ├── data/                    # Aset data frontend (tabel_gaji_2024.json)
 │   │   ├── pages/                   # Halaman Aplikasi
-│   │   │   ├── PegawaiPage.jsx      # Portal Publik Cetak & Verifikasi KP4
+│   │   │   ├── PegawaiPage.jsx      # Portal Publik Cetak, Verifikasi, & MKG
 │   │   │   ├── AdminLoginPage.jsx   # Autentikasi Pengelola / Admin
-│   │   │   ├── DashboardPage.jsx    # Dashboard CRUD Pegawai, KGB, & Pengaturan
+│   │   │   ├── DashboardPage.jsx    # Dashboard Pegawai, Modal Profil, KGB, & Pengaturan
 │   │   │   └── LogAktivitasPage.jsx # Riwayat Audit Trail Sistem
 │   │   ├── App.jsx                  # Routing utama aplikasi
 │   │   ├── index.css                # Sistem desain Archipelago Civic
@@ -115,16 +142,18 @@ kp4-system/
 │   ├── controllers/                 # Controller logika bisnis
 │   │   ├── adminController.js       # CRUD master data, KGB, konfigurasi, & log
 │   │   ├── authController.js        # Login admin & verifikasi JWT
-│   │   ├── pegawaiController.js     # Validasi publik & update masa kerja mandiri
-│   │   └── printController.js       # Endpoint generator berkas PDF
+│   │   ├── pegawaiController.js     # Validasi publik, auto-MKG, & kelengkapan data
+│   │   └── printController.js       # Endpoint generator berkas PDF KP4
+│   ├── data/                        # Dataset acuan resmi (tabel_gaji_2024.json & xlsx)
 │   ├── middleware/                  # Middleware penjaga rute
 │   │   └── auth.js                  # Guard token otentikasi JWT
+│   ├── migrations/                  # Skrip migrasi skema database (tmt_pangkat, mkg_offset)
 │   ├── models/                      # Definisi skema tabel Sequelize
 │   │   ├── Admin.js
 │   │   ├── Anak.js
 │   │   ├── LogAktivitas.js
 │   │   ├── Pasangan.js
-│   │   ├── Pegawai.js
+│   │   ├── Pegawai.js               # Model Pegawai (termasuk tmt_pangkat & mkg_offset)
 │   │   ├── Pengaturan.js
 │   │   └── index.js                 # Asosiasi relasi antar-entitas
 │   ├── routes/                      # Definisi rute REST API
@@ -135,7 +164,7 @@ kp4-system/
 │   │   └── seed.js
 │   ├── services/                    # Layanan pendukung komputasi
 │   │   ├── pdfGenerator.js          # Mesin penyusunan PDF naskah dinas
-│   │   └── salaryService.js         # Layanan kalkulasi gaji & tunjangan PP 5/2024
+│   │   └── salaryService.js         # Layanan kalkulasi gaji PP 5/2024 & MKG BKN
 │   ├── kp4.sqlite                   # Berkas basis data SQLite
 │   ├── server.js                    # Entry point server backend
 │   └── package.json
@@ -144,7 +173,7 @@ kp4-system/
 ├── start-dev.bat                    # Skrip 1-klik eksekusi untuk pengguna Windows
 ├── package.json                     # Konfigurasi root proyek & script runner
 ├── README.md                        # Dokumentasi utama proyek
-├── SRS.md                           # Dokumen Software Requirements Specification
+├── SRS.md                           # Dokumen Software Requirements Specification (v1.2.0)
 ├── UI-REDESIGN.md                   # Spesifikasi sistem desain antarmuka
 └── QA-notes.md                      # Catatan pengujian kualitas
 ```
@@ -239,6 +268,7 @@ Buka portal publik di `http://localhost:5173/` dan masukkan salah satu data peng
 | Method | Endpoint | Deskripsi | Parameter Utama |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/print/validate` | Memvalidasi identitas pegawai & mengambil data keluarga | Body: `{ nip, tanggal_lahir }` |
+| `POST` | `/api/print/complete-data` | Melengkapi profil data awal (tempat lahir, TMT, dsb.) mandiri | Body: `{ nip, tanggal_lahir, tempat_lahir, ... }` |
 | `POST` | `/api/print/update-mkg` | Memperbarui masa kerja (MKG) & menghitung gaji baru mandiri | Body: `{ nip, tanggal_lahir, mkg_tahun, mkg_bulan }` |
 | `GET` | `/api/print/config` | Mengambil parameter persentase kenaikan KGB aktif | — |
 | `POST` / `GET` | `/api/print/generate` | Menghasilkan dan mengunduh berkas PDF formulir KP4 | Query/Body: `{ nip }` |

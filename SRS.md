@@ -5,12 +5,18 @@
 
 ### Informasi Dokumen
 - **Nama Proyek:** Sistem Otomatisasi & Verifikasi Surat KP4 PNS
-- **Versi Dokumen:** 1.1.0
+- **Versi Dokumen:** 1.2.0
 - **Status:** Final / Disetujui (Revisi Terkini)
-- **Tanggal Rilis:** 2026-09-15
+- **Tanggal Rilis:** 2026-09-29
 - **Target Pembaca:** Pengembang Perangkat Lunak, Administrator Kepegawaian, Tim QA/Penguji, Pengambil Kebijakan Unit Kepegawaian (BKD/BKPSDM).
 - **Standar Format:** Mengacu pada IEEE Std 830-1998 / ISO/IEC/IEEE 29148:2018 (*Systems and software engineering — Life cycle processes — Requirements engineering*).
-- **Catatan Pembaruan (v1.1.0):** Penambahan konfigurasi dinamis pejabat penandatangan surat KP4 (Nama, Pangkat, NIP Kepala Sub Bagian Kepegawaian dan Umum) beserta *live visual preview*, restrukturisasi ergonomis tombol aksi tabel pegawai (*action-group*), dan pembaruan favicon aplikasi.
+- **Catatan Pembaruan (v1.2.0):** 
+  1. Komputasi otomatis Masa Kerja Golongan (MKG) berbasis TMT Pangkat/CPNS dan regulasi BKN (reset ke 0 tahun 0 bulan untuk kenaikan pangkat dalam rumpun golongan yang sama, serta dukungan pemotongan masa kerja via `mkg_offset` untuk kenaikan pangkat lintas golongan utama).
+  2. Integrasi dataset tabel gaji resmi PP No. 5 Tahun 2024 (`tabel_gaji_2024.json`) menggantikan aproksimasi rumus murni untuk presisi nominal rupiah per golongan dan MKG.
+  3. Antarmuka Jendela Modal (*Overlay Dialog*) "Lihat Profil Pegawai" pada dashboard admin dengan tab navigasi terpadu (Data Diri, Pasangan, Anak, Simulasi Finansial) dan dukungan shortcut `Esc`.
+  4. Paginasi tabel direktori kepegawaian (10, 25, 50 data per halaman).
+  5. Endpoint pengisian kelengkapan data awal pegawai mandiri (`/api/print/complete-data`).
+  6. Penambahan spesifikasi data yang dibutuhkan sistem berdasarkan audit kelengkapan file Excel ASN.
 
 ---
 
@@ -44,6 +50,7 @@
 5. [Spesifikasi Model Data & Basis Data (Data Requirements)](#5-spesifikasi-model-data--basis-data-data-requirements)
    - 5.1 [Entity Relationship Model](#51-entity-relationship-model)
    - 5.2 [Kamus Data (Data Dictionary)](#52-kamus-data-data-dictionary)
+   - 5.3 [Spesifikasi Kebutuhan Data dari File ASN](#53-spesifikasi-kebutuhan-data-dari-file-asn)
 6. [Kebutuhan Non-Fungsional (Non-Functional Requirements)](#6-kebutuhan-non-fungsional-non-functional-requirements)
    - 6.1 [Kinerja & Waktu Respon (Performance)](#61-kinerja--waktu-respon-performance)
    - 6.2 [Keamanan & Integritas Akses (Security)](#62-keamanan--integritas-akses-security)
@@ -122,14 +129,20 @@ Sistem Otomatisasi Surat KP4 merupakan sistem mandiri (*standalone client-server
 
 ### 2.2 Fungsi Utama Produk
 1. **Validasi Identitas Pegawai Publik:** Otentikasi dua faktor identifikasi (NIP 18 Digit + Tanggal Lahir).
-2. **Kalkulasi Otomatis Gaji Pokok & Tunjangan:**
-   - Penentuan gaji pokok berdasarkan golongan ruang (I/a s.d IV/e dan IX) dan kelipatan 2 tahun MKG mengacu pada PP No. 5/2024.
+2. **Kalkulasi Otomatis Gaji Pokok & Tunjangan (PP No. 5/2024):**
+   - Penentuan gaji pokok berdasarkan lookup resmi dataset tabel gaji **PP No. 5 Tahun 2024** (`tabel_gaji_2024.json`) untuk seluruh golongan ruang (I/a s.d IV/e dan IX) serta MKG (0 s.d 33 tahun).
    - Perhitungan tunjangan pasangan sebesar 10% dari gaji pokok (maksimal 1 pasangan sah).
    - Perhitungan tunjangan anak sebesar 2% dari gaji pokok per anak (maksimal 2 anak tanggungan).
    - Penjumlahan otomatis total penghasilan bruto.
-3. **Penyimpanan Interaktif Masa Kerja:** Pegawai dapat memperbarui masa kerja secara mandiri dengan pencatatan instan ke basis data.
+3. **Komputasi Otomatis MKG dari TMT & Penyesuaian Interaktif:**
+   - Sistem secara otomatis menghitung Masa Kerja Golongan (tahun & bulan) berdasarkan TMT Pangkat/CPNS sesuai regulasi BKN: MKG direset ke 0 pada kenaikan pangkat baru satu rumpun, serta penyesuaian masa kerja via `mkg_offset` untuk kenaikan pangkat lintas golongan utama.
+   - Pegawai terverifikasi tetap dapat menyesuaikan masa kerja secara mandiri dengan pencatatan instan ke basis data.
 4. **Pencetakan Berkas PDF Resmi:** Pengunduhan dokumen KP4 A4 siap cetak dengan penamaan file terstruktur (`KP4_<NIP>.pdf`) serta integrasi dinamis data pejabat penandatangan (Kepala Sub Bagian Kepegawaian dan Umum).
-5. **Manajemen Master Data Kepegawaian (Admin):** Modul CRUD lengkap untuk pegawai, pasangan, dan anak dengan proteksi *cascading delete* serta penataan tombol aksi baris tabel pegawai yang terstruktur (*action-group*) dan ergonomis.
+5. **Manajemen Master Data Kepegawaian & Modal Profil Terpadu (Admin):**
+   - Modul CRUD lengkap untuk pegawai, pasangan, dan anak dengan proteksi *cascading delete*.
+   - **Jendela Modal (*Overlay Dialog*) "Lihat Profil Pegawai":** Peninjauan komprehensif profil pegawai, keluarga, dan finansial dalam satu jendela fokus tanpa perlu menggulir (*scroll*) jauh ke bawah tabel.
+   - **Direktori Berpaginasi:** Pengaturan pembagian halaman (10, 25, 50 entri per halaman) untuk kemudahan navigasi data skala besar.
+   - Penataan tombol aksi baris tabel yang ergonomis (*action-group*).
 6. **Sistem Evaluasi Kenaikan Gaji Berkala (KGB):** Pemindaian otomatis kelayakan KGB pegawai, penyesuaian masa kerja +2 tahun, peningkatan gaji pokok dengan rasio persentase yang dapat diatur, dan pembaruan TMT.
 7. **Pengaturan Parameter Dinamis:** Antarmuka konfigurasi rasio kenaikan KGB serta pembaruan identitas Pejabat Penandatangan KP4 (Nama, Pangkat, NIP Kepala Sub Bagian) yang tersimpan persisten di basis data dan dilengkapi dengan *live preview* visual.
 8. **Audit Trail Komprehensif:** Pencatatan setiap aksi modifikasi data oleh admin ke dalam tabel log beserta stempel waktu dan IP asal.
@@ -197,15 +210,27 @@ Antarmuka sistem mengadopsi bahasa desain **Archipelago Civic** dengan karakteri
   1. Memeriksa keberadaan kedua parameter input (tidak boleh kosong).
   2. Mencari record pegawai pada basis data yang mencocokkan `nip` dan `tanggal_lahir`.
   3. Memuat data relasi pasangan dan anak yang berasosiasi dengan NIP tersebut.
-  4. Menyertakan informasi persentase kenaikan KGB aktif dari konfigurasi sistem.
+  4. Menghitung otomatis MKG berjalan dari TMT jika tersedia.
+  5. Menyertakan informasi persentase kenaikan KGB aktif dari konfigurasi sistem.
 - **Output:** Payload JSON data lengkap pegawai beserta relasi keluarga dan status 200 OK jika valid, atau status 404 Not Found / 400 Bad Request jika data tidak cocok.
 
-#### [FR-02] Penyesuaian Interaktif Masa Kerja Golongan (MKG)
-- **Deskripsi:** Sistem harus mengizinkan pegawai yang terverifikasi untuk menyesuaikan angka masa kerja golongan (tahun dan bulan) dan menyimpannya langsung ke database.
-- **Input:** `nip`, `tanggal_lahir`, `mkg_tahun` (integer ≥ 0), `mkg_bulan` (integer 0–11).
-- **Proses:**
+#### [FR-01B] Pengisian Kelengkapan Data Mandiri Pegawai
+- **Deskripsi:** Sistem menyediakan endpoint khusus bagi pegawai yang terverifikasi untuk melengkapi data atribut pokok (seperti tempat lahir, tanggal lahir, dan tanggal pengangkatan/TMT) apabila data awal dari sinkronisasi instansi belum lengkap.
+- **Endpoint:** `POST /api/print/complete-data`
+- **Input:** `nip`, `tanggal_lahir`, `tempat_lahir`, `tmt_cpns`, `tmt_pangkat`.
+- **Proses:** Memvalidasi kredensial NIP & Tanggal Lahir, kemudian memperbarui record pegawai dengan data yang baru diisi.
+- **Output:** Status konfirmasi 200 OK beserta payload profil pegawai yang telah diperbarui.
+
+#### [FR-02] Komputasi Otomatis MKG dari TMT & Penyesuaian Interaktif
+- **Deskripsi:** Sistem harus menghitung Masa Kerja Golongan (MKG) secara otomatis berdasarkan TMT Pangkat/CPNS sesuai regulasi BKN, sekaligus memungkinkan pegawai yang terverifikasi untuk menyesuaikan angka masa kerja golongan (tahun dan bulan) dan menyimpannya langsung ke database.
+- **Aturan Perhitungan MKG Berbasis BKN:**
+  1. **Kenaikan Pangkat Satu Rumpun (misal III/a → III/b):** MKG pada golongan baru kembali dimulai dari **0 tahun 0 bulan**, dihitung dari selisih bulan antara tanggal saat ini dengan `tmt_pangkat`.
+  2. **Kenaikan Pangkat Lintas Golongan Utama (misal II/d → III/a):** Masa kerja diperhitungkan dengan pemotongan masa kerja via `mkg_offset` (disimpan dalam satuan tahun; misal potongan 5 tahun = `mkg_offset: -5`).
+  3. **Pegawai Baru (Belum Pernah Naik Pangkat):** Menggunakan `tmt_cpns` sebagai titik awal perhitungan.
+- **Input Interaktif:** `nip`, `tanggal_lahir`, `mkg_tahun` (integer ≥ 0), `mkg_bulan` (integer 0–11).
+- **Proses Penyesuaian Mandiri:**
   1. Validasi ulang kecocokan NIP dan tanggal lahir.
-  2. Menghitung kembali gaji pokok otomatis berdasarkan golongan dan nilai `mkg_tahun` baru.
+  2. Menghitung kembali gaji pokok otomatis berdasarkan golongan dan nilai `mkg_tahun` baru menggunakan tabel resmi PP No. 5/2024.
   3. Memperbarui record kolom `mkg_tahun`, `mkg_bulan`, dan `gaji_pokok` pada tabel pegawai.
 - **Output:** Konfirmasi penyimpanan berhasil dan kalkulasi gaji baru dalam format JSON.
 
@@ -213,12 +238,15 @@ Antarmuka sistem mengadopsi bahasa desain **Archipelago Civic** dengan karakteri
 
 ### 4.2 Modul Kalkulasi Gaji & Tunjangan Keluarga
 
-#### [FR-03] Komputasi Gaji Pokok Otomatis (Tabel Acuan PP No. 5/2024)
-- **Deskripsi:** Sistem harus mampu menghitung gaji pokok otomatis untuk seluruh golongan ruang (I/a hingga IV/e serta PPPK Golongan IX) berdasarkan masa kerja.
-- **Rumus Perhitungan:**
-  $$\text{Gaji Pokok} = \text{Gaji Dasar}_{2024}(\text{Golongan}) \times (1 + \text{Persen KGB})^{\lfloor \text{MKG Tahun} / 2 \rfloor}$$
-  - Default `Persen KGB` = 3,15% (0.0315).
-  - Nilai nominal dibulatkan ke bilangan bulat terdekat (*Math.round*).
+#### [FR-03] Komputasi Gaji Pokok Otomatis (Tabel Acuan Resmi PP No. 5/2024)
+- **Deskripsi:** Sistem harus menentukan gaji pokok otomatis untuk seluruh golongan ruang (I/a hingga IV/e serta PPPK Golongan IX) berdasarkan masa kerja mengacu pada **PP No. 5 Tahun 2024** dan **Perpres No. 11 Tahun 2024**.
+- **Mekanisme Perhitungan:**
+  1. **Lookup Tabel Resmi (`tabel_gaji_2024.json`):** Sistem mencari nilai nominal gaji persis berdasarkan pasangan `(golongan, mkg_tahun)`.
+  2. **Penanganan MKG Ganjil:** Sesuai struktur tabel gaji PNS nasional di mana nominal berubah setiap kelipatan 2 tahun (genap), jika MKG bernilai ganjil (1, 3, 5, dst.), sistem menggunakan nilai nominal pada MKG genap sebelumnya:
+     $$\text{MKG}_{\text{ref}} = \lfloor \text{MKG Tahun} / 2 \rfloor \times 2$$
+  3. **Batas Maksimum Masa Kerja:** Jika MKG melebihi masa kerja maksimum tabel untuk golongan tersebut (misal > 32 tahun), sistem menetapkan nilai gaji pada batas maksimum golongan bersangkutan.
+  4. **Formula Fallback Dinamis:** Jika golongan tidak ditemukan pada dataset tabel resmi atau administrator menerapkan persentase kenaikan khusus:
+     $$\text{Gaji Pokok} = \text{Gaji Dasar}_{2024}(\text{Golongan}) \times (1 + \text{Persen KGB})^{\lfloor \text{MKG Tahun} / 2 \rfloor}$$
 
 #### [FR-04] Komputasi Tunjangan Keluarga
 - **Deskripsi:** Sistem harus menghitung rincian tunjangan keluarga dari gaji pokok yang berlaku:
@@ -265,17 +293,41 @@ Antarmuka sistem mengadopsi bahasa desain **Archipelago Civic** dengan karakteri
 
 ### 4.5 Modul Manajemen Data Kepegawaian & Keluarga (Admin Dashboard)
 
-#### [FR-08] Pengelolaan Data Pegawai (CRUD) & Antarmuka Terstruktur
+#### [FR-08] Pengelolaan Data Pegawai (CRUD) & Atribut Lanjutan
 - **Deskripsi:** Administrator dapat melihat daftar seluruh pegawai, mencari, menambah, mengubah, dan menghapus data pegawai.
 - **Fitur Spesifik:**
   - Menampilkan daftar dengan informasi NIP, Nama, Golongan, Unit Kerja, Gaji Pokok, dan Masa Kerja.
   - Pencarian fleksibel berdasarkan kombinasi nama, NIP, dan instansi unit kerja.
-  - **Tata Letak Aksi Terstruktur (Ergonomi Antarmuka):** Baris data tabel pegawai mengelompokkan tombol aksi "Buka" (tinjau detail) dan tombol ikon "Hapus" ke dalam wadah terstruktur (`action-group`) dengan spasi terukur (`gap: 10px`) untuk mencegah salah klik antara aksi navigasi dan aksi destruktif.
-  - Saat penambahan/pengubahan pegawai, jika gaji pokok tidak diisi, sistem menghitung otomatis dari golongan dan masa kerja.
+  - Kolom data mencakup: NIP, Nama, TTL, Golongan, Jabatan, Unit Kerja, Gaji Pokok, `tmt_cpns`, `tmt_kgb_terakhir`, `tmt_pangkat` (untuk acuan MKG baru), dan `mkg_offset` (untuk potongan masa kerja lintas golongan).
+  - Saat penambahan/pengubahan pegawai, jika gaji pokok dikosongkan, sistem menghitung otomatis dari golongan dan masa kerja berdasar tabel PP No. 5/2024.
+  - Tombol sinkronisasi kalkulasi MKG dari TMT pada formulir input.
   - Saat pegawai dihapus, sistem melakukan *cascading delete* terhadap seluruh data pasangan dan anak terkait.
 
+#### [FR-08B] Jendela Modal (*Overlay Dialog*) "Lihat Profil Pegawai" Terpadu
+- **Deskripsi:** Sistem menyediakan jendela modal pop-up fokus (*overlay dialog*) saat administrator menekan tombol "Buka" pada baris tabel pegawai, sehingga administrator dapat meninjau dan mengelola rincian profil tanpa perlu menggulir (*scroll*) jauh ke bawah halaman.
+- **Karakteristik & Fungsionalitas Modal:**
+  1. **Tampilan Fokus & Latar Redup:** Modal tampil di tengah layar (*center aligned*) dengan latar belakang kabur (*backdrop blur*) untuk memusatkan perhatian kerja.
+  2. **Navigasi Berbasis Tab:**
+     - **Tab Data Pokok Pegawai:** Informasi NIP, Golongan, Jabatan, Unit Kerja, TMT Pangkat, TMT CPNS, dan Masa Kerja Golongan.
+     - **Tab Data Pasangan:** Daftar pasangan sah beserta opsi penambahan, pengubahan, dan penghapusan data pasangan.
+     - **Tab Data Anak:** Tabel tanggungan anak beserta status hubungan dan pendidikan, lengkap dengan aksi CRUD.
+     - **Tab Rincian Gaji & KP4:** Simulasi komputasi finansial gaji pokok, tunjangan keluarga, total bruto, dan tombol aksi unduh dokumen resmi KP4 langsung dari modal.
+  3. **Ergonomi Penutupan Fleksibel:** Modal dapat ditutup melalui:
+     - Tombol ikon silang (X) di sudut kanan atas modal.
+     - Tombol aksi "Tutup" pada bagian bawah modal.
+     - Klik pada area di luar kontainer modal (*click-outside backdrop*).
+     - Tombol pintasan keyboard **`Escape` (Esc)** untuk kecepatan alur kerja.
+
+#### [FR-08C] Paginasi Direktori Kepegawaian
+- **Deskripsi:** Tabel direktori data pegawai pada dashboard admin wajib mendukung paginasi data secara dinamis untuk menjamin kenyamanan navigasi dan efisiensi memori pada peramban web saat memuat ribuan data ASN.
+- **Spesifikasi:**
+  - Opsi jumlah data per halaman yang dapat dipilih pengguna: **10**, **25**, atau **50** data per halaman.
+  - Kontrol navigasi: tombol *Previous* (Sebelumnya), *Next* (Selanjutnya), serta indikator nomor halaman aktif dan total halaman.
+  - Ringkasan teks informasi: *"Menampilkan X – Y dari Z pegawai"*.
+  - Pemfilteran pencarian tetap berlaku di seluruh dataset dengan reset halaman otomatis ke halaman 1 saat kata kunci pencarian berubah.
+
 #### [FR-09] Pengelolaan Data Pasangan (CRUD)
-- **Deskripsi:** Administrator dapat menambah, memperbarui, dan menghapus data pasangan yang terikat pada NIP pegawai bersangkutan.
+- **Deskripsi:** Administrator dapat menambah, memperbarui, dan menghapus data pasangan yang terikat pada NIP pegawai bersangkutan, baik melalui modal profil maupun formulir manajemen.
 - **Field Data:** `id`, `nip`, `nama`, `tempat_lahir`, `tanggal_lahir`, `pekerjaan`, `tanggal_menikah`.
 
 #### [FR-10] Pengelolaan Data Anak (CRUD)
@@ -364,8 +416,10 @@ erDiagram
         decimal gaji_pokok "Nominal Rupiah"
         date tmt_cpns
         date tmt_kgb_terakhir
+        date tmt_pangkat "TMT Pangkat/Golongan Saat Ini"
         integer mkg_tahun
         integer mkg_bulan
+        integer mkg_offset "Offset Pemotongan MKG Lintas Golongan"
         string status_kgb "Normal / Waktunya KGB"
     }
 
@@ -424,8 +478,10 @@ Menyimpan entitas data pokok Pegawai Negeri Sipil.
 | `gaji_pokok` | DECIMAL(15,2) | Besaran nominal gaji pokok bulanan (Rupiah). |
 | `tmt_cpns` | DATE | Tanggal mulai pengangkatan sebagai CPNS. |
 | `tmt_kgb_terakhir`| DATE | Tanggal TMT kenaikan gaji berkala terakhir. |
+| `tmt_pangkat` | DATE | Tanggal TMT efektif pangkat/golongan saat ini (titik acuan reset MKG 0 thn sesuai aturan BKN). |
 | `mkg_tahun` | INTEGER | Masa kerja golongan dalam satuan tahun (default: 0). |
 | `mkg_bulan` | INTEGER | Masa kerja golongan dalam satuan bulan (default: 0). |
+| `mkg_offset` | INTEGER | Offset penyesuaian masa kerja (dalam tahun, default: 0) untuk kenaikan pangkat lintas golongan utama (I→II: -6 thn, II→III: -5 thn). |
 | `status_kgb` | VARCHAR(20) | Status periodik KGB (`Normal` atau `Waktunya KGB`). |
 | `createdAt` | DATETIME | Waktu pembuatan baris data. |
 | `updatedAt` | DATETIME | Waktu pembaruan data terakhir. |
@@ -491,6 +547,26 @@ Menyimpan parameter konfigurasi global sistem secara *key-value*.
 | `createdAt` | DATETIME | Waktu pembuatan konfigurasi. |
 | `updatedAt` | DATETIME | Waktu pembaruan konfigurasi. |
 
+### 5.3 Spesifikasi Kebutuhan Data dari File ASN
+
+Berdasarkan audit teknis terhadap berkas data primer kepegawaian instansi (`DATA ASN SEPTEMBER 2026.xlsx`), dilakukan pemetaan antara data yang telah tersedia secara default dengan data yang masih harus dilengkapi agar modul otomasi KP4 dan evaluasi KGB dapat beroperasi secara penuh:
+
+| Parameter Data | Tersedia di File ASN | Kebutuhan di Sistem | Implikasi Fungsional & Solusi Sistem |
+| :--- | :---: | :---: | :--- |
+| **NIP (18 Digit)** | ✅ Ada | **Wajib (Primary Key)** | Kunci primer identitas tunggal pegawai. Digunakan untuk pencarian data dan validasi login. |
+| **Nama Lengkap & Gelar** | ✅ Ada | **Wajib** | Identitas resmi yang dicetak pada naskah dinas KP4. |
+| **Pangkat / Golongan Ruang** | ✅ Ada | **Wajib** | Kunci penentu lookup nominal gaji pokok pada tabel resmi PP No. 5/2024. |
+| **Jabatan Kedinasan** | ✅ Ada | **Wajib** | Dicantumkan pada Bagian I kolom jabatan surat KP4. |
+| **Satuan / Unit Kerja (OPD)** | ✅ Ada | **Wajib** | Instansi penempatan pegawai yang tercetak pada formulir dinas. |
+| **Gaji Pokok Awal** | ✅ Ada | **Terisi Otomatis** | Nilai gaji pokok awal. Sistem dapat mengkalkulasi ulang secara otomatis berdasar tabel PP 5/2024 jika nilai kosong. |
+| **Tanggal Lahir** | ❌ Belum Ada | **Wajib Dilengkapi** | **Kritis:** Digunakan sebagai faktor otentikasi lapis kedua pada portal verifikasi mandiri publik (`[FR-01]`). Jika kosong, pegawai tidak dapat melakukan verifikasi mandiri. Disolusikan melalui pengisian awal oleh admin atau endpoint `POST /api/print/complete-data`. |
+| **Tempat Lahir** | ❌ Belum Ada | **Perlu Dilengkapi** | Wajib tercantum pada naskah resmi formulir KP4 Bagian I. |
+| **TMT Pangkat Terakhir** | ❌ Belum Ada | **Sangat Disarankan** | Titik acuan perhitungan otomatis Masa Kerja Golongan (MKG) berjalan sesuai regulasi BKN di mana MKG kembali ke 0 tahun 0 bulan sejak tanggal penetapan pangkat baru. |
+| **TMT CPNS (Pengangkatan)** | ❌ Belum Ada | **Disarankan** | Menghitung akumulasi total masa kerja pengabdian pegawai atau sebagai *fallback* awal bagi pegawai baru yang belum pernah naik pangkat. |
+| **TMT KGB Terakhir** | ❌ Belum Ada | **Perlu Dilengkapi** | Parameter penentu komputasi siklus 2 tahunan evaluasi otomatis Kenaikan Gaji Berkala (`[FR-11]`). |
+| **Data Pasangan (Suami/Istri)** | ❌ Belum Ada | **Kondisional** | Nama, TTL, Tanggal Menikah, NIP/Pekerjaan untuk penentuan hak tunjangan keluarga 10% dari gaji pokok (`[FR-04]`). |
+| **Data Tanggungan Anak** | ❌ Belum Ada | **Kondisional** | Nama, TTL, Status Hubungan, Status Pendidikan untuk hak tunjangan keluarga 2% per anak (maksimal 2 anak tanggungan) (`[FR-04]`). |
+
 ---
 
 ## 6. Kebutuhan Non-Fungsional (Non-Functional Requirements)
@@ -527,13 +603,16 @@ Matriks berikut menghubungkan kebutuhan pengguna, kebutuhan fungsional (FR), imp
 | Kode Kebutuhan | Deskripsi Singkat | Modul Backend / Frontend Terkait | Endpoint REST API |
 | :--- | :--- | :--- | :--- |
 | **FR-01** | Validasi NIP & Tanggal Lahir Publik | `PegawaiPage.jsx`, `pegawaiController.js` | `POST /api/print/validate` |
-| **FR-02** | Penyesuaian Interaktif MKG | `PegawaiPage.jsx`, `pegawaiController.js` | `POST /api/print/update-mkg` |
-| **FR-03** | Komputasi Gaji Otomatis (PP 5/2024) | `salaryService.js` | Digunakan internal controller |
+| **FR-01B**| Pengisian Kelengkapan Data Awal Mandiri | `PegawaiPage.jsx`, `pegawaiController.js` | `POST /api/print/complete-data` |
+| **FR-02** | Komputasi MKG Otomatis TMT & Penyesuaian Mandiri | `salaryService.js`, `PegawaiPage.jsx` | `POST /api/print/update-mkg` |
+| **FR-03** | Komputasi Gaji Otomatis (Tabel PP 5/2024 JSON) | `salaryService.js`, `tabel_gaji_2024.json` | Digunakan internal controller |
 | **FR-04** | Komputasi Tunjangan Keluarga | `salaryService.js` | Digunakan internal controller & PDF |
 | **FR-05** | Generator PDF Resmi KP4 & Tanda Tangan Dinamis | `pdfGenerator.js`, `printController.js` | `POST` / `GET /api/print/generate` |
 | **FR-06** | Autentikasi Admin JWT | `AdminLoginPage.jsx`, `authController.js` | `POST /api/auth/login` |
 | **FR-07** | Otorisasi & Guard Middleware | `middleware/auth.js` | Dipasang di seluruh `/api/admin/*` |
-| **FR-08** | CRUD Pegawai, Hitung Gaji Baru, & Aksi Terstruktur | `DashboardPage.jsx`, `adminController.js` | `GET`, `POST`, `PUT`, `DELETE /api/admin/pegawai` |
+| **FR-08** | CRUD Pegawai & Komputasi Otomatis Data Pokok | `DashboardPage.jsx`, `adminController.js` | `GET`, `POST`, `PUT`, `DELETE /api/admin/pegawai` |
+| **FR-08B**| Jendela Modal (*Overlay Dialog*) Profil Terpadu | `DashboardPage.jsx` | Komponen Dialog Internal |
+| **FR-08C**| Paginasi Direktori Kepegawaian (10/25/50 data) | `DashboardPage.jsx` | State Navigasi Internal |
 | **FR-09** | CRUD Data Pasangan | `DashboardPage.jsx`, `adminController.js` | `POST`, `PUT`, `DELETE /api/admin/pasangan` |
 | **FR-10** | CRUD Data Tanggungan Anak | `DashboardPage.jsx`, `adminController.js` | `POST`, `PUT`, `DELETE /api/admin/anak` |
 | **FR-11** | Deteksi Otomatis Kelayakan KGB | `DashboardPage.jsx`, `adminController.js` | `GET /api/admin/kgb/eligible` |
