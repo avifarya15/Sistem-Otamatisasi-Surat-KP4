@@ -24,6 +24,22 @@ const Pegawai = sequelize.define('Pegawai', {
   jabatan: {
     type: DataTypes.STRING(100)
   },
+  agama: {
+    type: DataTypes.STRING(30),
+    allowNull: true,
+    defaultValue: null
+  },
+  kebangsaan: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    defaultValue: 'Indonesia'
+  },
+  alamat: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    defaultValue: null,
+    comment: 'Alamat/tempat tinggal pegawai untuk formulir KP4 (butir 11)'
+  },
   unit_kerja: {
     type: DataTypes.STRING(150)
   },

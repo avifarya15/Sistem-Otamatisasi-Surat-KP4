@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import api from '../api/axios';
 import Icon from '../components/Icon';
 
@@ -79,8 +79,6 @@ function InfoItem({ label, value }) {
  * Menggunakan sistem modal standar (.modal-overlay & .modal-dialog) dengan backdrop blur dan styling rapi
  */
 function FamilyModal({ isOpen, onClose, mode = 'all', pegawai, onSave, saving }) {
-  if (!isOpen) return null;
-
   const [tab, setTab] = useState(() => (mode === 'anak' ? 'anak' : 'pasangan'));
 
   // Data Pasangan
@@ -561,19 +559,192 @@ function FamilyModal({ isOpen, onClose, mode = 'all', pegawai, onSave, saving })
   );
 }
 
+/**
+ * Modal Edit Data Profil Satuan (Agama, Kebangsaan, atau Alamat/Tempat Tinggal)
+ * Ditampilkan tersendiri untuk masing-masing field agar tidak bertumpuk dalam satu window
+ */
+function SingleProfileEditModal({ mode, onClose, pegawai, onSave, saving }) {
+  const AGAMA_OPTIONS = ['Islam', 'Kristen Protestan', 'Kristen Katolik', 'Hindu', 'Buddha', 'Konghucu'];
+
+  const [val, setVal] = useState(() => {
+    if (mode === 'agama') return pegawai?.agama || '';
+    if (mode === 'kebangsaan') return pegawai?.kebangsaan || 'Indonesia';
+    if (mode === 'alamat') return pegawai?.alamat || '';
+    return '';
+  });
+
+  useEffect(() => {
+    if (mode === 'agama') setVal(pegawai?.agama || '');
+    else if (mode === 'kebangsaan') setVal(pegawai?.kebangsaan || 'Indonesia');
+    else if (mode === 'alamat') setVal(pegawai?.alamat || '');
+    else setVal('');
+  }, [mode, pegawai]);
+
+  // Validasi setelah pemanggilan hooks: jika mode null atau data sudah terisi, jangan render dialog
+  if (!mode) return null;
+
+  const currentValue = pegawai?.[mode];
+  if (currentValue && String(currentValue).trim() !== '') {
+    return null;
+  }
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!val || !val.toString().trim()) {
+      return window.alert('Mohon lengkapi isian terlebih dahulu.');
+    }
+    if (mode === 'agama') onSave({ agama: val }, 'Data agama berhasil diperbarui!');
+    else if (mode === 'kebangsaan') onSave({ kebangsaan: val.trim() }, 'Data kebangsaan berhasil diperbarui!');
+    else if (mode === 'alamat') onSave({ alamat: val.trim() }, 'Data tempat tinggal berhasil diperbarui!');
+  };
+
+  const titles = {
+    agama: {
+      eyebrow: 'Lengkapi Data Profil',
+      title: 'Agama Pegawai',
+      desc: 'Pilih agama sesuai data resmi kepegawaian untuk lembar KP4.',
+      btn: 'Simpan Agama'
+    },
+    kebangsaan: {
+      eyebrow: 'Lengkapi Data Profil',
+      title: 'Kewarganegaraan / Kebangsaan',
+      desc: 'Status kebangsaan untuk dicantumkan pada surat KP4 resmi.',
+      btn: 'Simpan Kebangsaan'
+    },
+    alamat: {
+      eyebrow: 'Lengkapi Data Profil',
+      title: 'Alamat / Tempat Tinggal',
+      desc: 'Alamat tempat tinggal lengkap Anda saat ini (Butir 11 formulir KP4).',
+      btn: 'Simpan Tempat Tinggal'
+    }
+  };
+
+  const config = titles[mode] || titles.agama;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '460px' }}>
+        <div className="modal-header">
+          <div className="modal-title-group">
+            <div className="modal-title-badge" style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}>
+              <Icon name="shield" size={22} strokeWidth={2.4} />
+            </div>
+            <div>
+              <div className="eyebrow" style={{ color: '#6366F1', marginBottom: '2px' }}>
+                {config.eyebrow}
+              </div>
+              <h2>{config.title}</h2>
+              <p>{config.desc}</p>
+            </div>
+          </div>
+          <button type="button" className="modal-close-btn" onClick={onClose} title="Tutup">
+            <Icon name="close" size={16} strokeWidth={2.2} />
+            <span>Tutup</span>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+          <div className="modal-body">
+            {mode === 'agama' && (
+              <div className="field-group">
+                <label className="field-label">
+                  Pilihan Agama <span style={{ color: '#6366F1' }}>*</span>
+                </label>
+                <select
+                  className="field-input"
+                  value={val}
+                  onChange={(e) => setVal(e.target.value)}
+                  required
+                  autoFocus
+                  style={{ cursor: 'pointer' }}
+                >
+                  <option value="">-- Pilih Agama --</option>
+                  {AGAMA_OPTIONS.map((a) => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '.75rem', color: '#94A3B8', marginTop: 4, display: 'block' }}>
+                  Akan tercetak pada butir 4 formulir KP4 resmi.
+                </span>
+              </div>
+            )}
+
+            {mode === 'kebangsaan' && (
+              <div className="field-group">
+                <label className="field-label">
+                  Kebangsaan / Kewarganegaraan <span style={{ color: '#6366F1' }}>*</span>
+                </label>
+                <input
+                  className="field-input"
+                  type="text"
+                  placeholder="Contoh: Indonesia"
+                  value={val}
+                  onChange={(e) => setVal(e.target.value)}
+                  required
+                  autoFocus
+                />
+                <span style={{ fontSize: '.75rem', color: '#94A3B8', marginTop: 4, display: 'block' }}>
+                  Isi "Indonesia" untuk WNI, atau kewarganegaraan lain jika berlaku (Butir 5 KP4).
+                </span>
+              </div>
+            )}
+
+            {mode === 'alamat' && (
+              <div className="field-group">
+                <label className="field-label">
+                  Alamat / Tempat Tinggal Lengkap <span style={{ color: '#6366F1' }}>*</span>
+                </label>
+                <textarea
+                  className="field-input"
+                  rows={3}
+                  placeholder="Contoh: Jl. Tadulako No. 12, Palu, Sulawesi Tengah"
+                  value={val}
+                  onChange={(e) => setVal(e.target.value)}
+                  required
+                  autoFocus
+                  style={{ resize: 'vertical', minHeight: '80px' }}
+                />
+                <span style={{ fontSize: '.75rem', color: '#94A3B8', marginTop: 4, display: 'block' }}>
+                  Akan dicetak pada butir 11 formulir KP4 resmi.
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="modal-footer">
+            <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
+              Batal
+            </button>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Menyimpan…' : (
+                <><Icon name="check" size={15} /> {config.btn}</>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function PegawaiPage() {
   const [nip, setNip] = useState('');
+
   const [tanggalLahir, setTanggalLahir] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [data, setData] = useState(null);
   const [printing, setPrinting] = useState(false);
 
-  // Modal State
+  // Modal State (Keluarga)
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('all'); // 'pasangan' | 'anak' | 'all'
   const [savingModal, setSavingModal] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Modal State (Profil per fitur: 'agama' | 'kebangsaan' | 'alamat' | null)
+  const [profileModalMode, setProfileModalMode] = useState(null);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const openModal = (mode = 'all') => {
     setModalMode(mode);
@@ -590,6 +761,32 @@ function PegawaiPage() {
     const missingAnakFields = data.anak?.some((a) => !a.tempat_lahir || !a.status_pendidikan);
     return noPasangan || noAnak || missingPasanganFields || missingAnakFields;
   }, [data]);
+
+  const handleProfileSave = async (pegawaiUpdate, labelSukses) => {
+    // Pengamanan: jika data yang ingin diisi sudah ada di database, cegah perubahan oleh user
+    for (const key of Object.keys(pegawaiUpdate)) {
+      if (data && data[key] && String(data[key]).trim() !== '') {
+        window.alert(`Data ${key} sudah terdaftar dan tidak dapat diubah secara mandiri oleh pegawai.`);
+        setProfileModalMode(null);
+        return;
+      }
+    }
+    setSavingProfile(true);
+    try {
+      const res = await api.post('/print/complete-data', {
+        nip: data.nip,
+        tanggal_lahir: tanggalLahir,
+        pegawai_update: pegawaiUpdate
+      });
+      setData(res.data.pegawai);
+      setProfileModalMode(null);
+      setSuccessMsg(labelSukses || 'Data berhasil disimpan!');
+    } catch (err) {
+      window.alert(`Error: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const handleVerify = async (e) => {
     e.preventDefault();
@@ -682,7 +879,7 @@ function PegawaiPage() {
 
   return (
     <main className="public-main">
-      {data && (
+      {data && modalOpen && (
         <FamilyModal
           isOpen={modalOpen}
           onClose={() => setModalOpen(false)}
@@ -690,6 +887,15 @@ function PegawaiPage() {
           pegawai={data}
           onSave={handleModalSave}
           saving={savingModal}
+        />
+      )}
+      {data && profileModalMode && (
+        <SingleProfileEditModal
+          mode={profileModalMode}
+          onClose={() => setProfileModalMode(null)}
+          pegawai={data}
+          onSave={handleProfileSave}
+          saving={savingProfile}
         />
       )}
 
@@ -978,8 +1184,130 @@ function PegawaiPage() {
               <InfoItem label="MKG Aktif" value={`${data.mkg_tahun ?? 0} Tahun ${data.mkg_bulan ?? 0} Bulan`} />
               <InfoItem label="TMT KGB Terakhir" value={formatDate(data.tmt_kgb_terakhir)} />
               <InfoItem label="Status KGB" value={data.status_kgb || 'Normal'} />
+
+              {/* Agama — jika sudah ada tidak bisa diubah oleh user */}
+              <div className="info-item">
+                <span>Agama</span>
+                {data.agama ? (
+                  <strong>{data.agama}</strong>
+                ) : (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        background: '#FEF3C7',
+                        color: '#92400E',
+                        fontSize: '.72rem',
+                        fontWeight: 700,
+                        borderRadius: 6,
+                        padding: '2px 8px',
+                        border: '1px solid #FCD34D'
+                      }}
+                    >
+                      ⚠ Belum diisi
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setProfileModalMode('agama')}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#6366F1',
+                        fontSize: '.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        padding: '2px 4px',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      Isi sekarang →
+                    </button>
+                  </span>
+                )}
+              </div>
+
+              {/* Kebangsaan — jika sudah ada tidak bisa diubah oleh user */}
+              <div className="info-item">
+                <span>Kebangsaan</span>
+                {data.kebangsaan ? (
+                  <strong>{data.kebangsaan}</strong>
+                ) : (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        background: '#FEF3C7',
+                        color: '#92400E',
+                        fontSize: '.72rem',
+                        fontWeight: 700,
+                        borderRadius: 6,
+                        padding: '2px 8px',
+                        border: '1px solid #FCD34D'
+                      }}
+                    >
+                      ⚠ Belum diisi
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setProfileModalMode('kebangsaan')}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#6366F1',
+                        fontSize: '.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        padding: '2px 4px',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      Isi sekarang →
+                    </button>
+                  </span>
+                )}
+              </div>
+
+              {/* Alamat / Tempat Tinggal — jika sudah ada tidak bisa diubah oleh user */}
+              <div className="info-item">
+                <span>Alamat / Tempat tinggal</span>
+                {data.alamat ? (
+                  <strong style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{data.alamat}</strong>
+                ) : (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        background: '#FEF3C7',
+                        color: '#92400E',
+                        fontSize: '.72rem',
+                        fontWeight: 700,
+                        borderRadius: 6,
+                        padding: '2px 8px',
+                        border: '1px solid #FCD34D'
+                      }}
+                    >
+                      ⚠ Belum diisi
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setProfileModalMode('alamat')}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#6366F1',
+                        fontSize: '.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        padding: '2px 4px',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      Isi sekarang →
+                    </button>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
+
+
 
           <div className="result-section">
             <h3>

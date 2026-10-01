@@ -264,10 +264,26 @@ const completeData = async (req, res) => {
       }
     }
 
-    // 5. Update data pegawai (tempat_lahir, tmt_cpns, tmt_pangkat, dll.)
+    // 5. Update data pegawai (tempat_lahir, agama, kebangsaan, alamat, tmt_cpns, tmt_pangkat, dll.)
     if (pegawai_update && typeof pegawai_update === 'object') {
       const safeUpdate = {};
       if ('tempat_lahir' in pegawai_update) safeUpdate.tempat_lahir = cleanString(pegawai_update.tempat_lahir);
+      // Pegawai hanya boleh melengkapi jika data di DB masih kosong/null (tidak bisa diubah jika sudah ada)
+      if ('agama' in pegawai_update) {
+        if (!pegawai.agama || String(pegawai.agama).trim() === '') {
+          safeUpdate.agama = cleanString(pegawai_update.agama);
+        }
+      }
+      if ('kebangsaan' in pegawai_update) {
+        if (!pegawai.kebangsaan || String(pegawai.kebangsaan).trim() === '') {
+          safeUpdate.kebangsaan = cleanString(pegawai_update.kebangsaan) || 'Indonesia';
+        }
+      }
+      if ('alamat' in pegawai_update) {
+        if (!pegawai.alamat || String(pegawai.alamat).trim() === '') {
+          safeUpdate.alamat = cleanString(pegawai_update.alamat);
+        }
+      }
       if ('tmt_cpns' in pegawai_update) safeUpdate.tmt_cpns = cleanDate(pegawai_update.tmt_cpns);
       if ('tmt_kgb_terakhir' in pegawai_update) safeUpdate.tmt_kgb_terakhir = cleanDate(pegawai_update.tmt_kgb_terakhir);
       if ('tmt_pangkat' in pegawai_update) safeUpdate.tmt_pangkat = cleanDate(pegawai_update.tmt_pangkat);

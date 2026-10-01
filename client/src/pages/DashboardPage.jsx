@@ -283,7 +283,10 @@ function DashboardPage() {
         mkg_offset: res.data.mkg_offset ?? 0,
         mkg_tahun: res.data.mkg_tahun ?? 0,
         mkg_bulan: res.data.mkg_bulan ?? 0,
-        status_kgb: res.data.status_kgb || 'Normal'
+        status_kgb: res.data.status_kgb || 'Normal',
+        agama: res.data.agama || '',
+        kebangsaan: res.data.kebangsaan || 'Indonesia',
+        alamat: res.data.alamat || ''
       });
       setIsAdding(false);
       setIsAddingPasangan(false);
@@ -637,7 +640,7 @@ function DashboardPage() {
                   setIsAdding(true); 
                   setSelectedPegawai(null); 
                   setSelectedNip(null); 
-                  setFormPegawai({ mkg_tahun: 0, mkg_bulan: 0, mkg_offset: 0, tmt_pangkat: '', tmt_cpns: '', status_kgb: 'Normal' });
+                  setFormPegawai({ mkg_tahun: 0, mkg_bulan: 0, mkg_offset: 0, tmt_pangkat: '', tmt_cpns: '', status_kgb: 'Normal', agama: '', kebangsaan: 'Indonesia', alamat: '' });
                   setHasNewPasangan(false);
                   setNewPasangan({ nama: '', tempat_lahir: '', tanggal_lahir: '', pekerjaan: '', tanggal_menikah: '' });
                   setHasNewAnak(false);
@@ -1016,6 +1019,30 @@ function DashboardPage() {
                   <Field label="Unit kerja" style={{ gridColumn: 'span 2' }}>
                     <input className="field-input" value={formPegawai.unit_kerja || ''} onChange={e => updatePegawai('unit_kerja', e.target.value)} placeholder="Contoh: Dinas Pendidikan" />
                   </Field>
+                  <Field label="Agama">
+                    <select className="field-input" value={formPegawai.agama || ''} onChange={e => updatePegawai('agama', e.target.value)}>
+                      <option value="">-- Pilih Agama --</option>
+                      <option value="Islam">Islam</option>
+                      <option value="Kristen Protestan">Kristen Protestan</option>
+                      <option value="Kristen Katolik">Kristen Katolik</option>
+                      <option value="Hindu">Hindu</option>
+                      <option value="Buddha">Buddha</option>
+                      <option value="Konghucu">Konghucu</option>
+                    </select>
+                  </Field>
+                  <Field label="Kebangsaan" hint="Default: Indonesia">
+                    <input className="field-input" value={formPegawai.kebangsaan || 'Indonesia'} onChange={e => updatePegawai('kebangsaan', e.target.value)} placeholder="Indonesia" />
+                  </Field>
+                  <Field label="Alamat / Tempat Tinggal" hint="Butir 11 pada formulir KP4" style={{ gridColumn: 'span 2' }}>
+                    <textarea
+                      className="field-input"
+                      rows={2}
+                      value={formPegawai.alamat || ''}
+                      onChange={e => updatePegawai('alamat', e.target.value)}
+                      placeholder="Contoh: Jl. Tadulako No. 12, Palu, Sulawesi Tengah"
+                      style={{ resize: 'vertical', minHeight: '60px' }}
+                    />
+                  </Field>
                 </div>
 
                 <div className="form-section-title">
@@ -1375,6 +1402,30 @@ function DashboardPage() {
                   </Field>
                   <Field label="Unit kerja" style={{ gridColumn: 'span 2' }}>
                     <input className="field-input" value={formPegawai.unit_kerja || ''} onChange={e => updatePegawai('unit_kerja', e.target.value)} />
+                  </Field>
+                  <Field label="Agama">
+                    <select className="field-input" value={formPegawai.agama || ''} onChange={e => updatePegawai('agama', e.target.value)}>
+                      <option value="">-- Pilih Agama --</option>
+                      <option value="Islam">Islam</option>
+                      <option value="Kristen Protestan">Kristen Protestan</option>
+                      <option value="Kristen Katolik">Kristen Katolik</option>
+                      <option value="Hindu">Hindu</option>
+                      <option value="Buddha">Buddha</option>
+                      <option value="Konghucu">Konghucu</option>
+                    </select>
+                  </Field>
+                  <Field label="Kebangsaan" hint="Default: Indonesia">
+                    <input className="field-input" value={formPegawai.kebangsaan || 'Indonesia'} onChange={e => updatePegawai('kebangsaan', e.target.value)} placeholder="Indonesia" />
+                  </Field>
+                  <Field label="Alamat / Tempat Tinggal" hint="Butir 11 pada formulir KP4" style={{ gridColumn: 'span 2' }}>
+                    <textarea
+                      className="field-input"
+                      rows={2}
+                      value={formPegawai.alamat || ''}
+                      onChange={e => updatePegawai('alamat', e.target.value)}
+                      placeholder="Contoh: Jl. Tadulako No. 12, Palu, Sulawesi Tengah"
+                      style={{ resize: 'vertical', minHeight: '60px' }}
+                    />
                   </Field>
                 </div>
 
