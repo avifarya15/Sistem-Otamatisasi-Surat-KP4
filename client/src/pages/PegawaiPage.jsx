@@ -5,10 +5,10 @@ import Icon from '../components/Icon';
 const formatDate = (d) =>
   d
     ? new Date(d).toLocaleDateString('id-ID', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      })
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    })
     : '-';
 
 const formatCurrency = (n) =>
@@ -98,6 +98,7 @@ function FamilyModal({ isOpen, onClose, mode = 'all', pegawai, onSave, saving })
   const [pasPenghasilan, setPasPenghasilan] = useState(
     existingPas?.penghasilan && Number(existingPas.penghasilan) > 0 ? existingPas.penghasilan : ''
   );
+  const [pasNamaSekolah, setPasNamaSekolah] = useState(existingPas?.nama_sekolah || '');
 
   // Data Anak Baru
   const [newChildren, setNewChildren] = useState([
@@ -161,7 +162,8 @@ function FamilyModal({ isOpen, onClose, mode = 'all', pegawai, onSave, saving })
         tanggal_lahir: pasTanggalLahir || null,
         pekerjaan: pasPekerjaan.trim() || null,
         tanggal_menikah: pasTanggalMenikah || null,
-        penghasilan: pasStatusPenghasilan === 'ada' ? Number(pasPenghasilan) || 0 : 0
+        penghasilan: pasStatusPenghasilan === 'ada' ? Number(pasPenghasilan) || 0 : 0,
+        nama_sekolah: pasNamaSekolah.trim() || null
       };
 
       if (existingPas) {
@@ -197,15 +199,15 @@ function FamilyModal({ isOpen, onClose, mode = 'all', pegawai, onSave, saving })
         ? 'Ubah Data Pasangan'
         : 'Tambah Data Pasangan'
       : mode === 'anak'
-      ? 'Tambah Data Anak Tanggungan'
-      : 'Lengkapi Data Keluarga KP4';
+        ? 'Tambah Data Anak Tanggungan'
+        : 'Lengkapi Data Keluarga KP4';
 
   const modalSubtitle =
     mode === 'pasangan'
       ? 'Data suami atau istri untuk pengajuan tunjangan keluarga (10%).'
       : mode === 'anak'
-      ? 'Data anak tanggungan untuk pengajuan tunjangan anak (2% per anak).'
-      : 'Lengkapi data keluarga agar tunjangan otomatis aktif pada berkas surat KP4.';
+        ? 'Data anak tanggungan untuk pengajuan tunjangan anak (2% per anak).'
+        : 'Lengkapi data keluarga agar tunjangan otomatis aktif pada berkas surat KP4.';
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -317,6 +319,20 @@ function FamilyModal({ isOpen, onClose, mode = 'all', pegawai, onSave, saving })
                       value={pasTanggalMenikah}
                       onChange={(e) => setPasTanggalMenikah(e.target.value)}
                     />
+                  </div>
+
+                  <div className="field-group" style={{ gridColumn: 'span 2' }}>
+                    <label className="field-label">Nama Sekolah / Perguruan Tinggi</label>
+                    <input
+                      className="field-input"
+                      type="text"
+                      placeholder="Contoh: Universitas Tadulako / SMA Negeri 1 Palu"
+                      value={pasNamaSekolah}
+                      onChange={(e) => setPasNamaSekolah(e.target.value)}
+                    />
+                    <span style={{ fontSize: '.75rem', color: '#94A3B8', marginTop: 4, display: 'block' }}>
+                      Dicantumkan pada butir keterangan pasangan lembar KP4 resmi (Nama Sekolah/Perguruan Tinggi).
+                    </span>
                   </div>
 
                   <div className="field-group" style={{ gridColumn: 'span 2' }}>
@@ -1082,10 +1098,10 @@ function PegawaiPage() {
                   <strong>
                     {mkgInfo?.tmt_referensi
                       ? new Date(mkgInfo.tmt_referensi).toLocaleDateString('id-ID', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric'
-                        })
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric'
+                      })
                       : '-'}
                   </strong>
                   {mkgInfo?.mkg_offset_tahun !== 0 && mkgInfo?.mkg_offset_tahun != null && (
@@ -1353,6 +1369,11 @@ function PegawaiPage() {
                           : 'Tidak Berpenghasilan'}
                       </strong>
                     </p>
+                    {data.pasangan[0].nama_sekolah && (
+                      <p style={{ marginTop: 4, fontSize: '.78rem', color: '#64748B' }}>
+                        Sekolah/PT: <strong>{data.pasangan[0].nama_sekolah}</strong>
+                      </p>
+                    )}
                   </div>
                   <div style={{ marginTop: 14 }}>
                     <button type="button" className="btn-edit-family" onClick={() => openModal('pasangan')}>

@@ -150,7 +150,8 @@ function DashboardPage() {
     tempat_lahir: '',
     tanggal_lahir: '',
     pekerjaan: '',
-    tanggal_menikah: ''
+    tanggal_menikah: '',
+    nama_sekolah: ''
   });
 
   const [hasNewAnak, setHasNewAnak] = useState(false);
@@ -396,7 +397,8 @@ function DashboardPage() {
               tempat_lahir: newPasangan.tempat_lahir || null,
               tanggal_lahir: newPasangan.tanggal_lahir || null,
               pekerjaan: newPasangan.pekerjaan || null,
-              tanggal_menikah: newPasangan.tanggal_menikah || null
+              tanggal_menikah: newPasangan.tanggal_menikah || null,
+              nama_sekolah: newPasangan.nama_sekolah || null
             });
           } catch (errPasangan) {
             console.error('Gagal menyimpan pasangan baru:', errPasangan);
@@ -429,7 +431,7 @@ function DashboardPage() {
         window.alert(msgKeluarga);
         setIsAdding(false);
         setHasNewPasangan(false);
-        setNewPasangan({ nama: '', tempat_lahir: '', tanggal_lahir: '', pekerjaan: '', tanggal_menikah: '' });
+        setNewPasangan({ nama: '', tempat_lahir: '', tanggal_lahir: '', pekerjaan: '', tanggal_menikah: '', nama_sekolah: '' });
         setHasNewAnak(false);
         setNewAnakList([]);
       } else {
@@ -642,7 +644,7 @@ function DashboardPage() {
                   setSelectedNip(null); 
                   setFormPegawai({ mkg_tahun: 0, mkg_bulan: 0, mkg_offset: 0, tmt_pangkat: '', tmt_cpns: '', status_kgb: 'Normal', agama: '', kebangsaan: 'Indonesia', alamat: '' });
                   setHasNewPasangan(false);
-                  setNewPasangan({ nama: '', tempat_lahir: '', tanggal_lahir: '', pekerjaan: '', tanggal_menikah: '' });
+                  setNewPasangan({ nama: '', tempat_lahir: '', tanggal_lahir: '', pekerjaan: '', tanggal_menikah: '', nama_sekolah: '' });
                   setHasNewAnak(false);
                   setNewAnakList([]);
                 }}>
@@ -1230,12 +1232,20 @@ function DashboardPage() {
                             onChange={e => setNewPasangan({ ...newPasangan, tanggal_lahir: e.target.value })}
                           />
                         </Field>
-                        <Field label="Tanggal Pernikahan" style={{ gridColumn: 'span 2' }}>
+                        <Field label="Tanggal Pernikahan">
                           <input
                             className="field-input"
                             type="date"
                             value={dateOnly(newPasangan.tanggal_menikah)}
                             onChange={e => setNewPasangan({ ...newPasangan, tanggal_menikah: e.target.value })}
+                          />
+                        </Field>
+                        <Field label="Nama Sekolah / Perguruan Tinggi">
+                          <input
+                            className="field-input"
+                            value={newPasangan.nama_sekolah || ''}
+                            onChange={e => setNewPasangan({ ...newPasangan, nama_sekolah: e.target.value })}
+                            placeholder="Contoh: Universitas Tadulako"
                           />
                         </Field>
                       </div>
@@ -1597,7 +1607,8 @@ function DashboardPage() {
                             tempat_lahir: p.tempat_lahir,
                             tanggal_lahir: p.tanggal_lahir,
                             pekerjaan: p.pekerjaan,
-                            tanggal_menikah: p.tanggal_menikah
+                            tanggal_menikah: p.tanggal_menikah,
+                            nama_sekolah: p.nama_sekolah
                           });
                         }}>Edit</button>
                         <button className="text-action red" onClick={() => handleDeletePasangan(selectedPegawai.pasangan[0].id)}>Hapus</button>
@@ -1621,6 +1632,9 @@ function DashboardPage() {
                       </Field>
                       <Field label="Tanggal menikah">
                         <input className="field-input" type="date" value={dateOnly(formPasangan.tanggal_menikah)} onChange={e => setFormPasangan({ ...formPasangan, tanggal_menikah: e.target.value })} />
+                      </Field>
+                      <Field label="Nama Sekolah / Perguruan Tinggi">
+                        <input className="field-input" value={formPasangan.nama_sekolah || ''} onChange={e => setFormPasangan({ ...formPasangan, nama_sekolah: e.target.value })} placeholder="Contoh: Universitas Tadulako" />
                       </Field>
                       <div className="form-actions">
                         <button className="btn-teal small" type="submit">Simpan</button>

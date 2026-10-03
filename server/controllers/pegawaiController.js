@@ -200,7 +200,8 @@ const completeData = async (req, res) => {
         tanggal_lahir: cleanDate(pasangan_baru.tanggal_lahir),
         pekerjaan: cleanString(pasangan_baru.pekerjaan),
         tanggal_menikah: cleanDate(pasangan_baru.tanggal_menikah),
-        penghasilan: cleanNumber(pasangan_baru.penghasilan)
+        penghasilan: cleanNumber(pasangan_baru.penghasilan),
+        nama_sekolah: cleanString(pasangan_baru.nama_sekolah)
       };
 
       if (pegawai.pasangan && pegawai.pasangan.length > 0) {
@@ -223,6 +224,7 @@ const completeData = async (req, res) => {
       if ('pekerjaan' in pasangan_update) safeUpdate.pekerjaan = cleanString(pasangan_update.pekerjaan);
       if ('tanggal_menikah' in pasangan_update) safeUpdate.tanggal_menikah = cleanDate(pasangan_update.tanggal_menikah);
       if ('penghasilan' in pasangan_update) safeUpdate.penghasilan = cleanNumber(pasangan_update.penghasilan);
+      if ('nama_sekolah' in pasangan_update) safeUpdate.nama_sekolah = cleanString(pasangan_update.nama_sekolah);
 
       if (Object.keys(safeUpdate).length > 0) {
         await pasangan.update(safeUpdate);

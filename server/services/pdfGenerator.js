@@ -223,13 +223,18 @@ const generateKP4 = (data, res, pejabat = {}) => {
   const p = (data.pasangan && data.pasangan.length > 0) ? data.pasangan[0] : null;
   doc.font('Helvetica').fontSize(7.5);
   if (p) {
+    const hasPenghasilan = p.penghasilan != null && Number(p.penghasilan) > 0;
+    const penghasilanText = hasPenghasilan ? `Rp. ${formatRupiah(p.penghasilan)},-` : '-';
+    const pekerjaanText = (p.pekerjaan && p.pekerjaan.trim()) ? p.pekerjaan.trim() : '-';
+    const sekolahText = (p.nama_sekolah && p.nama_sekolah.trim()) ? p.nama_sekolah.trim() : '-';
+
     doc.text('1', colX[0], pDataY + 6, { width: colW[0], align: 'center' });
     doc.font('Helvetica-Bold').text(p.nama || '-', colX[1] + 3, pDataY + 6, { width: colW[1] - 6, lineBreak: false });
     doc.font('Helvetica').text(formatDateShort(p.tanggal_lahir), colX[2], pDataY + 6, { width: colW[2], align: 'center' });
     doc.text(formatDateShort(p.tanggal_menikah), colX[3], pDataY + 6, { width: colW[3], align: 'center' });
-    doc.text('-', colX[4], pDataY + 6, { width: colW[4], align: 'center' });
-    doc.text(p.pekerjaan || 'Petani/\nPekebun', colX[5] + 2, pDataY + 3, { width: colW[5] - 4, align: 'center' });
-    doc.text('Rp. 2.000.000,-', colX[6] + 2, pDataY + 6, { width: colW[6] - 4, align: 'center' });
+    doc.text(sekolahText, colX[4] + 2, pDataY + 5, { width: colW[4] - 4, align: 'center' });
+    doc.text(pekerjaanText, colX[5] + 2, pDataY + 5, { width: colW[5] - 4, align: 'center' });
+    doc.text(penghasilanText, colX[6] + 2, pDataY + 6, { width: colW[6] - 4, align: 'center' });
     doc.text('Di\ntanggung', colX[7] + 1, pDataY + 3, { width: colW[7] - 2, align: 'center' });
   } else {
     doc.text('-', colX[0], pDataY + 6, { width: colW[0], align: 'center' });
