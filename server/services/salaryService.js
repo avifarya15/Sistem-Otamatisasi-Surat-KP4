@@ -255,6 +255,56 @@ function hitungMKGOtomatis(tmtPangkat, tmtCpns, mkgOffset = 0) {
 }
 
 /**
+ * Hitung total masa kerja sejak TMT CPNS (terlepas dari MKG golongan).
+ * Ini adalah masa kerja keseluruhan sejak pertama kali diangkat sebagai CPNS/PNS,
+ * berbeda dengan MKG yang dihitung dari TMT Pangkat saat ini.
+ *
+ * Berguna untuk menampilkan informasi "sudah berapa lama menjadi PNS",
+ * bukan untuk kalkulasi gaji (yang menggunakan MKG dari TMT Pangkat).
+ *
+ * @param {string|Date|null} tmtCpns - Tanggal TMT CPNS
+ * @returns {{ totalBulan: number, tahun: number, bulan: number, hari: number, refDate: string|null, valid: boolean }}
+ */
+function hitungMasaKerjaCpns(tmtCpns) {
+  if (!tmtCpns) {
+    return { totalBulan: 0, tahun: 0, bulan: 0, hari: 0, refDate: null, valid: false };
+  }
+
+  const refDate = new Date(tmtCpns);
+  if (isNaN(refDate.getTime())) {
+    return { totalBulan: 0, tahun: 0, bulan: 0, hari: 0, refDate: null, valid: false };
+  }
+
+  const now = new Date();
+
+  // Hitung selisih tahun dan bulan
+  let totalBulan =
+    (now.getFullYear() - refDate.getFullYear()) * 12 +
+    (now.getMonth() - refDate.getMonth());
+  if (now.getDate() < refDate.getDate()) totalBulan--;
+  if (totalBulan < 0) totalBulan = 0;
+
+  const tahun = Math.floor(totalBulan / 12);
+  const bulan = totalBulan % 12;
+
+  // Hitung sisa hari (estimasi)
+  const tmpDate = new Date(refDate);
+  tmpDate.setFullYear(tmpDate.getFullYear() + tahun);
+  tmpDate.setMonth(tmpDate.getMonth() + bulan);
+  const diffMs = now - tmpDate;
+  const hari = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+
+  return {
+    totalBulan,
+    tahun,
+    bulan,
+    hari,
+    refDate: refDate.toISOString().split('T')[0],
+    valid: true
+  };
+}
+
+/**
  * Mendapatkan golongan utama (angka roman: I, II, III, IV)
  * @param {string} golongan - misal 'III/c', 'II/a', 'IV/b'
  * @returns {string} - 'I', 'II', 'III', 'IV', atau ''
@@ -358,6 +408,7 @@ module.exports = {
   getGajiPokok,
   hitungKenaikanKgb,
   hitungMKGOtomatis,
+  hitungMasaKerjaCpns,
   getGolonganUtama,
   hitungMasaKerjaDanGaji,
   hitungTunjanganKeluarga,

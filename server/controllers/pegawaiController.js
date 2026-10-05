@@ -3,7 +3,8 @@ const {
   getGajiPokok,
   getPersenKgb,
   TABEL_GAJI_OFFICIAL,
-  hitungMKGOtomatis
+  hitungMKGOtomatis,
+  hitungMasaKerjaCpns
 } = require('../services/salaryService');
 
 /**
@@ -36,6 +37,9 @@ const validatePegawai = async (req, res) => {
       pegawai.tmt_cpns,
       mkgOffset
     );
+
+    // === HITUNG MASA KERJA SEJAK TMT CPNS (total lama menjadi PNS) ===
+    const masaKerjaCpns = hitungMasaKerjaCpns(pegawai.tmt_cpns);
 
     // Hitung gaji pokok berdasarkan MKG otomatis
     const gajiOtomatis = getGajiPokok(pegawai.golongan, mkgOtomatis.tahun);
@@ -73,6 +77,15 @@ const validatePegawai = async (req, res) => {
         tmt_pangkat: pegawai.tmt_pangkat || null,
         tmt_cpns: pegawai.tmt_cpns || null,
         mkg_offset_tahun: mkgOffset
+      },
+      // Info masa kerja total sejak pertama diangkat CPNS/PNS
+      masa_kerja_cpns_info: {
+        tmt_cpns: pegawai.tmt_cpns || null,
+        total_bulan: masaKerjaCpns.totalBulan,
+        tahun: masaKerjaCpns.tahun,
+        bulan: masaKerjaCpns.bulan,
+        hari: masaKerjaCpns.hari,
+        valid: masaKerjaCpns.valid
       }
     });
   } catch (error) {
@@ -319,6 +332,7 @@ const completeData = async (req, res) => {
     // Sertakan info MKG otomatis dalam response
     const mkgOffset = Number(updated.mkg_offset) || 0;
     const mkgOtomatis = hitungMKGOtomatis(updated.tmt_pangkat, updated.tmt_cpns, mkgOffset);
+    const masaKerjaCpns = hitungMasaKerjaCpns(updated.tmt_cpns);
 
     res.json({
       message: 'Data keluarga berhasil disimpan ke database.',
@@ -334,6 +348,14 @@ const completeData = async (req, res) => {
           tmt_pangkat: updated.tmt_pangkat || null,
           tmt_cpns: updated.tmt_cpns || null,
           mkg_offset_tahun: mkgOffset
+        },
+        masa_kerja_cpns_info: {
+          tmt_cpns: updated.tmt_cpns || null,
+          total_bulan: masaKerjaCpns.totalBulan,
+          tahun: masaKerjaCpns.tahun,
+          bulan: masaKerjaCpns.bulan,
+          hari: masaKerjaCpns.hari,
+          valid: masaKerjaCpns.valid
         }
       }
     });

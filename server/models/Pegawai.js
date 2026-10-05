@@ -22,7 +22,7 @@ const Pegawai = sequelize.define('Pegawai', {
     type: DataTypes.STRING(10)
   },
   jabatan: {
-    type: DataTypes.STRING(100)
+    type: DataTypes.STRING(255)
   },
   agama: {
     type: DataTypes.STRING(30),

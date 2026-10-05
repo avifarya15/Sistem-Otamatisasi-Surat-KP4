@@ -25,3 +25,11 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Temporary files dari Excel / Office
+~$*.xlsx
+~$*.xls
+~$*.docx
+
+# Scratch
+scratch/

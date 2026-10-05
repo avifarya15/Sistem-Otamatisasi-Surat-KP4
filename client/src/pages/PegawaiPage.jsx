@@ -65,6 +65,28 @@ const hitungGaji = (golongan, tahun, persen = 3.15) => {
   );
 };
 
+/**
+ * Hitung masa kerja dari TMT CPNS di sisi klien (fallback jika server tidak kirim data).
+ * @param {string|null} tmtCpns
+ * @returns {{ totalBulan: number, tahun: number, bulan: number, hari: number, valid: boolean }}
+ */
+const hitungMasaKerjaCpnsClient = (tmtCpns) => {
+  if (!tmtCpns) return { totalBulan: 0, tahun: 0, bulan: 0, hari: 0, valid: false };
+  const refDate = new Date(tmtCpns);
+  if (isNaN(refDate.getTime())) return { totalBulan: 0, tahun: 0, bulan: 0, hari: 0, valid: false };
+  const now = new Date();
+  let totalBulan = (now.getFullYear() - refDate.getFullYear()) * 12 + (now.getMonth() - refDate.getMonth());
+  if (now.getDate() < refDate.getDate()) totalBulan--;
+  if (totalBulan < 0) totalBulan = 0;
+  const tahun = Math.floor(totalBulan / 12);
+  const bulan = totalBulan % 12;
+  const tmp = new Date(refDate);
+  tmp.setFullYear(tmp.getFullYear() + tahun);
+  tmp.setMonth(tmp.getMonth() + bulan);
+  const hari = Math.max(0, Math.floor((now - tmp) / (1000 * 60 * 60 * 24)));
+  return { totalBulan, tahun, bulan, hari, valid: true };
+};
+
 function InfoItem({ label, value }) {
   return (
     <div className="info-item">
@@ -586,6 +608,7 @@ function SingleProfileEditModal({ mode, onClose, pegawai, onSave, saving }) {
     if (mode === 'agama') return pegawai?.agama || '';
     if (mode === 'kebangsaan') return pegawai?.kebangsaan || 'Indonesia';
     if (mode === 'alamat') return pegawai?.alamat || '';
+    if (mode === 'tmt_pangkat') return pegawai?.tmt_pangkat ? pegawai.tmt_pangkat.substring(0, 10) : '';
     return '';
   });
 
@@ -593,15 +616,20 @@ function SingleProfileEditModal({ mode, onClose, pegawai, onSave, saving }) {
     if (mode === 'agama') setVal(pegawai?.agama || '');
     else if (mode === 'kebangsaan') setVal(pegawai?.kebangsaan || 'Indonesia');
     else if (mode === 'alamat') setVal(pegawai?.alamat || '');
+    else if (mode === 'tmt_pangkat') setVal(pegawai?.tmt_pangkat ? pegawai.tmt_pangkat.substring(0, 10) : '');
     else setVal('');
   }, [mode, pegawai]);
 
-  // Validasi setelah pemanggilan hooks: jika mode null atau data sudah terisi, jangan render dialog
+  // Validasi setelah pemanggilan hooks
   if (!mode) return null;
 
-  const currentValue = pegawai?.[mode];
-  if (currentValue && String(currentValue).trim() !== '') {
-    return null;
+  // tmt_pangkat boleh selalu di-edit (pangkat bisa naik berkali-kali)
+  // Field lain (agama, kebangsaan, alamat) hanya bisa diisi jika kosong
+  if (mode !== 'tmt_pangkat') {
+    const currentValue = pegawai?.[mode];
+    if (currentValue && String(currentValue).trim() !== '') {
+      return null;
+    }
   }
 
   const handleSubmit = (e) => {
@@ -612,6 +640,7 @@ function SingleProfileEditModal({ mode, onClose, pegawai, onSave, saving }) {
     if (mode === 'agama') onSave({ agama: val }, 'Data agama berhasil diperbarui!');
     else if (mode === 'kebangsaan') onSave({ kebangsaan: val.trim() }, 'Data kebangsaan berhasil diperbarui!');
     else if (mode === 'alamat') onSave({ alamat: val.trim() }, 'Data tempat tinggal berhasil diperbarui!');
+    else if (mode === 'tmt_pangkat') onSave({ tmt_pangkat: val }, 'TMT Pangkat berhasil diperbarui! MKG dihitung ulang otomatis.');
   };
 
   const titles = {
@@ -632,6 +661,12 @@ function SingleProfileEditModal({ mode, onClose, pegawai, onSave, saving }) {
       title: 'Alamat / Tempat Tinggal',
       desc: 'Alamat tempat tinggal lengkap Anda saat ini (Butir 11 formulir KP4).',
       btn: 'Simpan Tempat Tinggal'
+    },
+    tmt_pangkat: {
+      eyebrow: 'Perbarui Data Kepangkatan',
+      title: 'TMT Pangkat Terakhir',
+      desc: 'Tanggal mulai berlaku (TMT) pangkat/golongan Anda saat ini. MKG akan dihitung ulang otomatis setelah disimpan.',
+      btn: 'Simpan & Hitung Ulang MKG'
     }
   };
 
@@ -725,6 +760,41 @@ function SingleProfileEditModal({ mode, onClose, pegawai, onSave, saving }) {
                 </span>
               </div>
             )}
+
+            {mode === 'tmt_pangkat' && (
+              <div className="field-group">
+                <label className="field-label">
+                  Tanggal TMT Pangkat <span style={{ color: '#6366F1' }}>*</span>
+                </label>
+                <input
+                  className="field-input"
+                  type="date"
+                  value={val}
+                  onChange={(e) => setVal(e.target.value)}
+                  required
+                  autoFocus
+                  max={new Date().toISOString().split('T')[0]}
+                />
+                <div
+                  style={{
+                    marginTop: 12,
+                    padding: '10px 14px',
+                    background: '#FFF7ED',
+                    border: '1px solid #FED7AA',
+                    borderRadius: '8px',
+                    fontSize: '.75rem',
+                    color: '#92400E',
+                    lineHeight: 1.6
+                  }}
+                >
+                  <strong>⚠ Perhatian:</strong> TMT Pangkat digunakan untuk menghitung Masa Kerja Golongan (MKG) secara otomatis.
+                  Pastikan tanggal sesuai SK Pangkat resmi Anda. MKG akan dihitung ulang segera setelah disimpan.
+                </div>
+                <span style={{ fontSize: '.75rem', color: '#94A3B8', marginTop: 8, display: 'block' }}>
+                  Contoh: Jika SK Pangkat terbit 1 April 2022, isi tanggal <strong>2022-04-01</strong>.
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="modal-footer">
@@ -778,9 +848,73 @@ function PegawaiPage() {
     return noPasangan || noAnak || missingPasanganFields || missingAnakFields;
   }, [data]);
 
+  // Kelengkapan data komprehensif — semua item wajib sebelum cetak KP4
+  const kelengkapanData = useMemo(() => {
+    if (!data) return null;
+    const mkgInfoLocal = data.mkg_otomatis_info || null;
+
+    const items = [
+      {
+        id: 'tmt_pangkat',
+        label: 'TMT Pangkat Terakhir',
+        bannerTitle: 'Data TMT Pangkat Belum Lengkap',
+        bannerSub: 'Lengkapi tanggal TMT Pangkat terakhir Anda agar Masa Kerja Golongan (MKG) dapat dihitung dan surat KP4 dapat dicetak.',
+        lengkap: !!(data.tmt_pangkat || mkgInfoLocal?.tmt_pangkat),
+        action: () => setProfileModalMode('tmt_pangkat'),
+        actionLabel: 'Isi TMT Pangkat Sekarang',
+        shortActionLabel: 'Isi TMT Pangkat'
+      },
+      {
+        id: 'agama',
+        label: 'Agama',
+        bannerTitle: 'Data Agama Belum Lengkap',
+        bannerSub: 'Lengkapi data agama Anda agar tercantum resmi pada formulir surat KP4.',
+        lengkap: !!(data.agama && String(data.agama).trim()),
+        action: () => setProfileModalMode('agama'),
+        actionLabel: 'Isi Agama Sekarang',
+        shortActionLabel: 'Isi Agama'
+      },
+      {
+        id: 'kebangsaan',
+        label: 'Kebangsaan',
+        bannerTitle: 'Data Kebangsaan Belum Lengkap',
+        bannerSub: 'Lengkapi data kewarganegaraan/kebangsaan Anda agar tercantum resmi pada formulir surat KP4.',
+        lengkap: !!(data.kebangsaan && String(data.kebangsaan).trim()),
+        action: () => setProfileModalMode('kebangsaan'),
+        actionLabel: 'Isi Kebangsaan Sekarang',
+        shortActionLabel: 'Isi Kebangsaan'
+      },
+      {
+        id: 'alamat',
+        label: 'Alamat / Tempat Tinggal',
+        bannerTitle: 'Data Alamat Belum Lengkap',
+        bannerSub: 'Lengkapi alamat tempat tinggal Anda agar tercantum pada butir 11 formulir KP4 resmi.',
+        lengkap: !!(data.alamat && String(data.alamat).trim()),
+        action: () => setProfileModalMode('alamat'),
+        actionLabel: 'Isi Alamat Sekarang',
+        shortActionLabel: 'Isi Alamat'
+      },
+      {
+        id: 'keluarga',
+        label: 'Data Keluarga',
+        bannerTitle: 'Data Keluarga Belum Lengkap',
+        bannerSub: 'Lengkapi data pasangan atau anak agar tunjangan keluarga otomatis tercantum pada lembar surat KP4 Anda.',
+        lengkap: !needsCompletion,
+        action: () => openModal('all'),
+        actionLabel: 'Lengkapi Data Sekarang',
+        shortActionLabel: 'Lengkapi Keluarga'
+      }
+    ];
+
+    const belumLengkap = items.filter((i) => !i.lengkap);
+    return { items, belumLengkap, siapCetak: belumLengkap.length === 0 };
+  }, [data, needsCompletion]);
+
   const handleProfileSave = async (pegawaiUpdate, labelSukses) => {
-    // Pengamanan: jika data yang ingin diisi sudah ada di database, cegah perubahan oleh user
+    // tmt_pangkat boleh diubah kapan saja (naik pangkat), field lain dikunci sekali diisi
+    const EDITABLE_FIELDS = ['tmt_pangkat'];
     for (const key of Object.keys(pegawaiUpdate)) {
+      if (EDITABLE_FIELDS.includes(key)) continue; // boleh diubah
       if (data && data[key] && String(data[key]).trim() !== '') {
         window.alert(`Data ${key} sudah terdaftar dan tidak dapat diubah secara mandiri oleh pegawai.`);
         setProfileModalMode(null);
@@ -813,6 +947,10 @@ function PegawaiPage() {
     try {
       const res = await api.post('/print/validate', { nip, tanggal_lahir: tanggalLahir });
       setData(res.data);
+      // Jika TMT Pangkat kosong, langsung buka modal wajib isi
+      if (!res.data.tmt_pangkat && !res.data.mkg_otomatis_info?.tmt_pangkat) {
+        setProfileModalMode('tmt_pangkat');
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Terjadi kesalahan saat memverifikasi data.');
     } finally {
@@ -865,6 +1003,11 @@ function PegawaiPage() {
 
   const persen = data?.persen_kenaikan_kgb || 3.15;
   const mkgInfo = data?.mkg_otomatis_info || null;
+
+  // Masa kerja total dari TMT CPNS (dari server atau fallback client-side)
+  const mkCpnsInfo = data?.masa_kerja_cpns_info?.valid
+    ? data.masa_kerja_cpns_info
+    : hitungMasaKerjaCpnsClient(data?.tmt_cpns || mkgInfo?.tmt_cpns);
   const est = useMemo(() => {
     if (!data) return null;
     const tahun = Math.max(0, Math.floor(Number(data.mkg_tahun) || 0));
@@ -1018,22 +1161,38 @@ function PegawaiPage() {
             </div>
           )}
 
-          {needsCompletion && (
-            <div className="completion-reminder-banner">
+          {/* === NOTIFIKASI KELENGKAPAN DATA (TAMPIL DI BAGIAN ATAS DASHBOARD PEGAWAI) === */}
+          {kelengkapanData && !kelengkapanData.siapCetak && (
+            <div className="completion-reminder-banner" style={{ flexWrap: 'wrap' }}>
               <div className="banner-content">
                 <span className="banner-icon">
                   <Icon name="alert" size={18} />
                 </span>
                 <div>
-                  <div className="banner-title">Data Keluarga Belum Lengkap</div>
+                  <div className="banner-title">
+                    {kelengkapanData.belumLengkap.length === 1
+                      ? kelengkapanData.belumLengkap[0].bannerTitle
+                      : 'Data Pegawai Belum Lengkap'}
+                  </div>
                   <p className="banner-sub">
-                    Lengkapi data pasangan atau anak agar tunjangan keluarga otomatis tercantum pada lembar surat KP4 Anda.
+                    {kelengkapanData.belumLengkap.length === 1
+                      ? kelengkapanData.belumLengkap[0].bannerSub
+                      : `Lengkapi data berikut sebelum mencetak surat KP4: ${kelengkapanData.belumLengkap.map((i) => i.label).join(', ')}.`}
                   </p>
                 </div>
               </div>
-              <button type="button" className="btn-banner-action" onClick={() => openModal('all')}>
-                Lengkapi Data Sekarang →
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {kelengkapanData.belumLengkap.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="btn-banner-action"
+                    onClick={item.action}
+                  >
+                    {kelengkapanData.belumLengkap.length === 1 ? item.actionLabel : item.shortActionLabel} →
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -1320,9 +1479,85 @@ function PegawaiPage() {
                   </span>
                 )}
               </div>
+              {/* Tambahan: Info TMT CPNS */}
+              <div className="info-item">
+                <span>TMT CPNS</span>
+                <strong>{mkgInfo?.tmt_cpns ? formatDate(mkgInfo.tmt_cpns) : (data.tmt_cpns ? formatDate(data.tmt_cpns) : '-')}</strong>
+              </div>
+
+              {/* Tambahan: Masa Kerja dari TMT CPNS (total lama menjadi PNS) */}
+              {mkCpnsInfo?.valid && (
+                <div className="info-item" style={{ gridColumn: 'span 1' }}>
+                  <span>Masa Kerja (sejak CPNS)</span>
+                  <strong style={{ color: '#0369A1' }}>
+                    {mkCpnsInfo.tahun} Tahun {mkCpnsInfo.bulan} Bulan{mkCpnsInfo.hari > 0 ? ` ${mkCpnsInfo.hari} Hari` : ''}
+                    <span style={{ display: 'block', fontWeight: 500, fontSize: '.75rem', color: '#64748B', marginTop: 2 }}>
+                      Total: {mkCpnsInfo.totalBulan} bulan
+                    </span>
+                  </strong>
+                </div>
+              )}
+
+              {/* TMT Pangkat — selalu tampil, user bisa edit/isi */}
+              <div className="info-item">
+                <span>TMT Pangkat Saat Ini</span>
+                {(data.tmt_pangkat || mkgInfo?.tmt_pangkat) ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <strong>{formatDate(data.tmt_pangkat || mkgInfo?.tmt_pangkat)}</strong>
+                    <button
+                      type="button"
+                      onClick={() => setProfileModalMode('tmt_pangkat')}
+                      style={{
+                        background: 'none',
+                        border: '1px solid #CBD5E1',
+                        color: '#475569',
+                        fontSize: '.72rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        lineHeight: 1.5
+                      }}
+                    >
+                      ✏ Ubah
+                    </button>
+                  </span>
+                ) : (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        background: '#FEF3C7',
+                        color: '#92400E',
+                        fontSize: '.72rem',
+                        fontWeight: 700,
+                        borderRadius: 6,
+                        padding: '2px 8px',
+                        border: '1px solid #FCD34D'
+                      }}
+                    >
+                      ⚠ Belum diisi
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setProfileModalMode('tmt_pangkat')}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#6366F1',
+                        fontSize: '.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        padding: '2px 4px',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      Isi sekarang →
+                    </button>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-
 
 
           <div className="result-section">
@@ -1453,7 +1688,18 @@ function PegawaiPage() {
             <p>
               <Icon name="check" size={18} /> Data dan masa kerja sudah sesuai? Unduh surat resmi KP4 Anda.
             </p>
-            <button className="btn-teal" onClick={handlePrint} disabled={printing}>
+
+            <button
+              className="btn-teal"
+              onClick={kelengkapanData && !kelengkapanData.siapCetak ? undefined : handlePrint}
+              disabled={printing || (kelengkapanData && !kelengkapanData.siapCetak)}
+              style={kelengkapanData && !kelengkapanData.siapCetak
+                ? { opacity: 0.45, cursor: 'not-allowed', filter: 'grayscale(0.5)' }
+                : {}}
+              title={kelengkapanData && !kelengkapanData.siapCetak
+                ? `Lengkapi data (${kelengkapanData.belumLengkap.map((i) => i.label).join(', ')}) terlebih dahulu pada notifikasi di bagian atas sebelum mengunduh surat KP4`
+                : 'Unduh surat KP4'}
+            >
               {printing ? 'Menyiapkan PDF…' : <>Unduh surat KP4 <Icon name="download" size={17} /></>}
             </button>
           </div>
