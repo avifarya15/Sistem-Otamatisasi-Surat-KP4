@@ -49,6 +49,14 @@ function extractBirthDateFromNip(nip) {
 
 /**
  * Helper untuk parsing TMT CPNS dari NIP
+ *
+ * Format NIP standar: YYYYMMDD YYYYMM G NNN (18 digit)
+ * - Digit 9-12: Tahun pengangkatan/CPNS
+ * - Digit 13-14: Bulan pengangkatan (01-12 untuk PNS)
+ *                Untuk PPPK, kode ini bisa berupa angka > 12 (mis. 20, 21)
+ *                yang merupakan kode khusus PPPK, bukan bulan kalender.
+ *
+ * Jika kode bulan > 12 (PPPK), fallback ke 01 Januari tahun pengangkatan.
  */
 function extractTmtCpnsFromNip(nip) {
   if (!nip || nip.length < 14) return null;
@@ -56,8 +64,14 @@ function extractTmtCpnsFromNip(nip) {
   const mm = nip.substring(12, 14);
   const y = Number(yyyy);
   const m = Number(mm);
-  if (y >= 1970 && y <= 2030 && m >= 1 && m <= 12) {
-    return `${yyyy}-${mm.padStart(2, '0')}-01`;
+  if (y >= 1970 && y <= 2030) {
+    if (m >= 1 && m <= 12) {
+      // NIP standar PNS - bulan valid
+      return `${yyyy}-${mm.padStart(2, '0')}-01`;
+    } else if (m >= 13) {
+      // NIP PPPK - kode angka bukan bulan, gunakan 01 Januari
+      return `${yyyy}-01-01`;
+    }
   }
   return null;
 }

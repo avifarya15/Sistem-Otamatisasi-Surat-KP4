@@ -72,8 +72,15 @@ const GAJI_DASAR_2024 = {
   'IV/c': 3571900,
   'IV/d': 3723000,
   'IV/e': 3880400,
-  // PPPK (Perpres No. 11/2024 contoh Golongan IX)
-  'IX': 3203300
+  // PPPK (Perpres No. 11/2024 - Gaji Pokok PPPK per Golongan)
+  'V':    2785700,  // SMA/SMK/D1/D2
+  'VI':   2896700,  // D2
+  'VII':  3028900,  // D3
+  'VIII': 3160100,  // S1/D4 (setara PNS III/b)
+  'IX':   3203300,  // S1/D4/Profesi
+  'X':    3339100,  // S2
+  'XI':   3480100,  // S2/S3
+  'XII':  3627900   // S3
 };
 
 // Persentase kenaikan tiap 2 tahun dari data acuan 2024 (default 3.15%)
@@ -128,9 +135,13 @@ function normalizeGolongan(golongan) {
     return `${tingkat}/${ruang}`;
   }
 
-  const pppkMap = { '9': 'IX' };
+  // Peta konversi angka ke golongan Romawi PPPK (untuk golongan tanpa slash)
+  const pppkMap = {
+    '5': 'V', '6': 'VI', '7': 'VII', '8': 'VIII',
+    '9': 'IX', '10': 'X', '11': 'XI', '12': 'XII'
+  };
   const upper = str.toUpperCase();
-  return pppkMap[upper] || upper;
+  return pppkMap[upper] || pppkMap[str] || upper;
 }
 
 /**
